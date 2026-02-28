@@ -1,4 +1,4 @@
-# LookAway MVP Project Tasks
+# Mixo MVP Project Tasks
 
 ## How to use this file
 1. Update checkboxes daily, keep progress real not aspirational.
