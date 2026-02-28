@@ -24,6 +24,7 @@ struct BreakTimerStateMachine {
         case resume
         case tick
         case forceBreak
+        case dismissBreak
         case reset
     }
 
@@ -107,6 +108,10 @@ struct BreakTimerStateMachine {
 
         case (.running, .forceBreak), (.paused, .forceBreak):
             state = .takingBreak(remaining: configuration.breakDurationSeconds)
+            return true
+
+        case (.takingBreak, .dismissBreak):
+            state = .running(remaining: configuration.workDurationSeconds)
             return true
 
         case (.idle, .reset), (.running, .reset), (.paused, .reset), (.takingBreak, .reset):

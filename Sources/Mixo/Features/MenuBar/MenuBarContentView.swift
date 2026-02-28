@@ -76,6 +76,10 @@ struct MenuBarContentView: View {
                 appState.hideOverlay()
             }
 
+            Button("Overlay Diagnostics") {
+                appState.logOverlayDiagnostics()
+            }
+
             Button("Quit Mixo") {
                 NSApplication.shared.terminate(nil)
             }

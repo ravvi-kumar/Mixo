@@ -55,6 +55,16 @@ final class BreakTimerStateMachineTests: XCTestCase {
         XCTAssertEqual(pausedMachine.state, .takingBreak(remaining: 3))
     }
 
+    func testDismissBreakReturnsToRunningCycle() {
+        var machine = makeMachine(work: 10, rest: 3)
+        XCTAssertTrue(machine.handle(.start))
+        XCTAssertTrue(machine.handle(.forceBreak))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 3))
+
+        XCTAssertTrue(machine.handle(.dismissBreak))
+        XCTAssertEqual(machine.state, .running(remaining: 10))
+    }
+
     func testResetReturnsToIdleFromAnyState() {
         var running = makeMachine(work: 5, rest: 2)
         XCTAssertTrue(running.handle(.start))

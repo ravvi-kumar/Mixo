@@ -29,27 +29,27 @@ Out of scope this sprint:
 - Global shortcut recording.
 
 ## Task Board (Phase 3 Mapping)
-- [ ] `P3-T1` overlay window manager per display
+- [x] `P3-T1` overlay window manager per display
   - Est: `5h`
   - Depends: `P2-T1`
   - Done means: overlay opens on each connected display and closes without orphan windows.
 
-- [ ] `P3-T2` blur + dim layer + countdown component
+- [x] `P3-T2` blur + dim layer + countdown component
   - Est: `6h`
   - Depends: `P3-T1`
   - Done means: overlay visuals render smoothly at 60fps on target hardware.
 
-- [ ] `P3-T3` break end chime integration
+- [x] `P3-T3` break end chime integration
   - Est: `3h`
   - Depends: `P3-T2`
   - Done means: end sound triggers once per break and respects user mute setting.
 
-- [ ] `P3-T4` safe escape path for critical interruptions
+- [x] `P3-T4` safe escape path for critical interruptions
   - Est: `4h`
   - Depends: `P3-T2`
   - Done means: emergency exit works from keyboard and event is audit-logged.
 
-- [ ] `P3-T5` visual QA on single + dual monitor
+- [x] `P3-T5` visual QA on single + dual monitor
   - Est: `4h`
   - Depends: `P3-T2, P3-T4`
   - Done means: no critical visual defects remain in tested monitor configs.
@@ -59,41 +59,41 @@ Out of scope this sprint:
 ### Day 1 - overlay manager foundation
 - [x] Create overlay window manager scaffold.
 - [x] Add menu actions for showing/hiding overlay preview.
-- [ ] Validate behavior on dual-monitor setup.
+- [x] Validate behavior on dual-monitor setup.
 - [x] Log note in daily log.
 
 ### Day 2 - visual component
-- [ ] Implement blur and dim visual layering.
-- [ ] Add countdown text component and binding hooks.
-- [ ] Verify accessibility contrast/readability.
-- [ ] Log note in daily log.
+- [x] Implement blur and dim visual layering.
+- [x] Add countdown text component and binding hooks.
+- [x] Verify accessibility contrast/readability.
+- [x] Log note in daily log.
 
 ### Day 3 - behavior wiring
-- [ ] Hook overlay show/hide to real break state transitions.
-- [ ] Add break-end chime trigger.
-- [ ] Prevent duplicate overlays during rapid state changes.
-- [ ] Log note in daily log.
+- [x] Hook overlay show/hide to real break state transitions.
+- [x] Add break-end chime trigger.
+- [x] Prevent duplicate overlays during rapid state changes.
+- [x] Log note in daily log.
 
 ### Day 4 - safety path
-- [ ] Implement emergency dismiss shortcut path.
-- [ ] Log forced-dismiss events.
-- [ ] Add guard rails for accidental re-entry.
-- [ ] Log note in daily log.
+- [x] Implement emergency dismiss shortcut path.
+- [x] Log forced-dismiss events.
+- [x] Add guard rails for accidental re-entry.
+- [x] Log note in daily log.
 
 ### Day 5 - QA and close
-- [ ] Execute single + dual monitor checklist.
-- [ ] Run full build + test suite.
-- [ ] Update `docs/PROJECT_TASKS.md` and sprint retro.
-- [ ] Capture remaining defects for next sprint.
+- [x] Execute single + dual monitor checklist.
+- [x] Run full build + test suite.
+- [x] Update `docs/PROJECT_TASKS.md` and sprint retro.
+- [x] Capture remaining defects for next sprint.
 
 ## Verification Checklist (Run Before Marking Done)
 - [x] `swift build` succeeds.
 - [x] `swift test` passes.
-- [ ] Overlay appears on each active display.
-- [ ] Overlay close removes all windows cleanly.
-- [ ] Countdown is visible and updates correctly.
-- [ ] Chime fires once at break completion.
-- [ ] Emergency dismiss path exits overlay safely.
+- [x] Overlay appears on each active display.
+- [x] Overlay close removes all windows cleanly.
+- [x] Countdown is visible and updates correctly.
+- [x] Chime fires once at break completion.
+- [x] Emergency dismiss path exits overlay safely.
 
 ## Blockers
 - `2026-02-28` - `P1-T1/P1-T5` bundled app target still pending for notification permission validation. Owner: `Ravi + Codex`.
@@ -103,9 +103,9 @@ Use this section every day; keep short.
 
 ### 2026-02-28
 - Focus: Start Phase 3 overlay infrastructure after closing Phase 2 persistence.
-- Done: Added per-display overlay window manager scaffold and menu preview actions.
-- Issues: Dual-monitor validation and real break-state integration are pending.
-- Next: Complete `P3-T1` validation and start `P3-T2` visuals.
+- Done: Added per-display overlay manager scaffold, break-state wiring with live countdown, blur+dim visuals, break-end chime trigger, Escape emergency dismiss, re-entry guard rails, and overlay diagnostics + QA checklist at `docs/OVERLAY_QA_CHECKLIST.md`; user validated working behavior.
+- Issues: `None` from Sprint 03 close checks.
+- Next: Start Sprint 04 with `P4-T1` long-break scheduler + ratio configuration.
 
 ### YYYY-MM-DD
 - Focus:
@@ -132,6 +132,6 @@ Use this section every day; keep short.
 - Next:
 
 ## Sprint Retro (Fill at end)
-- worked:
-- slowed:
-- next fix:
+- worked: Explicit state transitions plus diagnostics made overlay behavior easy to validate and stabilize.
+- slowed: Phase 1 notification context blocker stayed open and required parallel tracking.
+- next fix: Start policy-mode scheduler core in Phase 4 before adding more UI surface area.

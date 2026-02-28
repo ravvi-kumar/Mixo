@@ -9,7 +9,7 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 3 - break overlay (target: Week 3) [while P1 notification blocker remains]`
+- Current Phase: `Phase 4 - long breaks + skip/delay/lock (target: Week 4) [while P1 notification blocker remains]`
 - Blockers:
   - `2026-02-28` - `P1-T1/P1-T5`: current Xcode run mode launches a bare executable, not a bundled `.app`; `UNUserNotificationCenter` cannot initialize.
 - Decision Log:
@@ -25,6 +25,12 @@
   - `2026-02-28`: Added timer persistence (`UserDefaults`) and restart restore path for configuration + checkpointed state.
   - `2026-02-28`: Added AppState persistence integration tests; full test suite now 12 passing tests.
   - `2026-02-28`: Started Phase 3 with per-display overlay window manager scaffold and menu preview controls.
+  - `2026-02-28`: Wired overlay visibility to break-state transitions with live break countdown updates and screen-sync window management.
+  - `2026-02-28`: Added blur+dim overlay visuals, break-end chime trigger, and Escape emergency dismiss path with forced break-end transition.
+  - `2026-02-28`: Added emergency-dismiss debounce and reduced redundant overlay front-ordering during active break ticks.
+  - `2026-02-28`: User validated overlay flow as working; remaining Phase 3 work is dual-monitor/accessibility QA (`P3-T5`).
+  - `2026-02-28`: Added overlay diagnostics action and checklist file `docs/OVERLAY_QA_CHECKLIST.md` to standardize Phase 3 validation.
+  - `2026-02-28`: User validated Phase 3 overlay QA as working; Phase 3 tasks closed and moved focus to Phase 4 scheduler/policy work.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -131,40 +137,40 @@ Goal: full-screen blur/overlay with countdown for break sessions.
 Exit Criteria: break overlay appears on all active displays and exits cleanly after timer end.
 
 Tasks:
-- [ ] `P3-T1` overlay window manager per display  
+- [x] `P3-T1` overlay window manager per display  
   Description: build per-screen overlay window creation and teardown manager with z-order control.  
   Estimate: `5h`  
   Dependencies: `P2-T1`  
   Definition of Done: overlay opens on each connected display and closes without orphan windows.
 
-- [ ] `P3-T2` blur + dim layer + countdown component  
+- [x] `P3-T2` blur + dim layer + countdown component  
   Description: render blur background, dim tint, countdown text, and short instruction message.  
   Estimate: `6h`  
   Dependencies: `P3-T1`  
   Definition of Done: overlay visuals render smoothly at 60fps on target hardware.
 
-- [ ] `P3-T3` break end chime integration  
+- [x] `P3-T3` break end chime integration  
   Description: play calm chime when break ends, include mute-safe fallback path.  
   Estimate: `3h`  
   Dependencies: `P3-T2`  
   Definition of Done: end sound triggers once per break and respects user mute setting.
 
-- [ ] `P3-T4` safe escape path for critical interruptions  
+- [x] `P3-T4` safe escape path for critical interruptions  
   Description: add emergency dismiss path for urgent workflows while logging event as forced break end.  
   Estimate: `4h`  
   Dependencies: `P3-T2`  
   Definition of Done: emergency exit works from keyboard and event is audit-logged.
 
-- [ ] `P3-T5` visual QA on single + dual monitor  
+- [x] `P3-T5` visual QA on single + dual monitor  
   Description: run visual QA checklist on 1-monitor and 2-monitor setups for layout and transitions.  
   Estimate: `4h`  
   Dependencies: `P3-T2, P3-T4`  
   Definition of Done: no critical visual defects remain in tested monitor configs.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Overlay manager + break-state wiring converged quickly once diagnostics and explicit transitions were in place.`  
+slowed: `Notification permission blocker in Phase 1 remained unresolved and had to be isolated from overlay work.`  
+next fix: `Start Phase 4 long-break scheduler and policy layering with tests before UI expansion.`
 
 ## Phase 4 - long breaks + skip/delay/lock (target: Week 4)
 Goal: support long break cadence and enforcement policy modes.

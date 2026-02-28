@@ -76,6 +76,7 @@ final class AppState: ObservableObject {
     private let notificationService: NotificationPermissionService
     private let timerPersistenceService: TimerPersistenceService
     private let overlayWindowManager: OverlayWindowManager
+    private let breakChimeService: any BreakChimePlaying
     private let logger = AppLogger.make("state")
     private var timerStateMachine: BreakTimerStateMachine
     private var tickTask: Task<Void, Never>?
@@ -84,11 +85,13 @@ final class AppState: ObservableObject {
         notificationService: NotificationPermissionService = .init(),
         timerPersistenceService: TimerPersistenceService = .init(),
         overlayWindowManager: OverlayWindowManager = .init(),
+        breakChimeService: any BreakChimePlaying = BreakChimeService(),
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
         self.notificationService = notificationService
         self.timerPersistenceService = timerPersistenceService
         self.overlayWindowManager = overlayWindowManager
+        self.breakChimeService = breakChimeService
 
         let restoredSnapshot = timerPersistenceService.load()
         let restoredConfiguration = restoredSnapshot?.configuration ?? timerConfiguration
@@ -108,11 +111,16 @@ final class AppState: ObservableObject {
 
         syncTimerStateFromMachine()
         updateTickLoop()
+        updateOverlayForTimerState()
 
         if let restoredSnapshot {
             logger.info(
                 "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) break_seconds=\(restoredSnapshot.configuration.breakDurationSeconds, privacy: .public)"
             )
+        }
+
+        self.overlayWindowManager.setEmergencyDismissHandler { [weak self] in
+            self?.handleOverlayEmergencyDismiss()
         }
 
         Task { [weak self] in
@@ -200,6 +208,14 @@ final class AppState: ObservableObject {
         lastActionMessage = "Overlay hidden"
     }
 
+    func logOverlayDiagnostics() {
+        let diagnostics = overlayWindowManager.diagnostics()
+        logger.info(
+            "overlay_diagnostics mode=\(diagnostics.mode, privacy: .public) windows=\(diagnostics.windowCount, privacy: .public) screens=\(diagnostics.screenCount, privacy: .public)"
+        )
+        lastActionMessage = "Overlay diagnostics: \(diagnostics.windowCount) windows / \(diagnostics.screenCount) screens (\(diagnostics.mode))"
+    }
+
     func applyTimerSettings() {
         guard canApplyTimerSettings else {
             lastActionMessage = "Stop timer before applying settings"
@@ -218,6 +234,7 @@ final class AppState: ObservableObject {
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
         updateTickLoop()
+        updateOverlayForTimerState()
         persistTimerSnapshot()
 
         logger.info(
@@ -238,6 +255,7 @@ final class AppState: ObservableObject {
 
     @discardableResult
     private func applyTimerEvent(_ event: BreakTimerStateMachine.Event) -> Bool {
+        let previousMode = timerStateMachine.mode
         let previousState = timerStateMachine.stateDescription
         let changed = timerStateMachine.handle(event)
 
@@ -248,7 +266,13 @@ final class AppState: ObservableObject {
                 "timer_transition event=\(event.rawValue, privacy: .public) from=\(previousState, privacy: .public) to=\(currentState, privacy: .public)"
             )
             updateTickLoop()
+            updateOverlayForTimerState()
             persistTimerSnapshot()
+
+            if previousMode == .takingBreak, timerMode == .running {
+                breakChimeService.playBreakEndChime()
+                logger.info("break_completed")
+            }
         } else {
             logger.info(
                 "timer_event_ignored event=\(event.rawValue, privacy: .public) state=\(previousState, privacy: .public)"
@@ -299,5 +323,26 @@ final class AppState: ObservableObject {
             configuration: timerStateMachine.configuration,
             state: timerStateMachine.state
         )
+    }
+
+    private func updateOverlayForTimerState() {
+        if timerMode == .takingBreak {
+            overlayWindowManager.showBreakOverlay(remainingSeconds: timerRemainingSeconds)
+            return
+        }
+
+        overlayWindowManager.hideOverlay()
+    }
+
+    private func handleOverlayEmergencyDismiss() {
+        logger.info("action_overlay_emergency_dismiss")
+
+        if timerMode == .takingBreak, applyTimerEvent(.dismissBreak) {
+            lastActionMessage = "Break dismissed (emergency)"
+            return
+        }
+
+        overlayWindowManager.hideOverlay()
+        lastActionMessage = "Overlay dismissed"
     }
 }
