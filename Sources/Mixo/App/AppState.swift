@@ -5,6 +5,10 @@ import UserNotifications
 @MainActor
 final class AppState: ObservableObject {
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @Published var timerMode: BreakTimerStateMachine.Mode = .idle
+    @Published var timerRemainingSeconds: Int = 0
+    @Published var timerWorkDurationMinutes: Int
+    @Published var timerBreakDurationSeconds: Int
     @Published var lastActionMessage = "App started"
 
     var menuBarLabel: String {
@@ -28,11 +32,89 @@ final class AppState: ObservableObject {
         }
     }
 
-    private let notificationService: NotificationPermissionService
-    private let logger = AppLogger.make("state")
+    var timerModeDisplay: String {
+        switch timerMode {
+        case .idle:
+            return "Idle"
+        case .running:
+            return "Running"
+        case .paused:
+            return "Paused"
+        case .takingBreak:
+            return "Break"
+        }
+    }
 
-    init(notificationService: NotificationPermissionService = .init()) {
+    var timerRemainingDisplay: String {
+        Self.formatDuration(timerRemainingSeconds)
+    }
+
+    var canStartTimer: Bool {
+        timerMode == .idle
+    }
+
+    var canPauseTimer: Bool {
+        timerMode == .running
+    }
+
+    var canResumeTimer: Bool {
+        timerMode == .paused
+    }
+
+    var canTakeBreakNow: Bool {
+        timerMode == .running || timerMode == .paused
+    }
+
+    var canResetTimer: Bool {
+        timerMode != .idle
+    }
+
+    var canApplyTimerSettings: Bool {
+        timerMode == .idle
+    }
+
+    private let notificationService: NotificationPermissionService
+    private let timerPersistenceService: TimerPersistenceService
+    private let overlayWindowManager: OverlayWindowManager
+    private let logger = AppLogger.make("state")
+    private var timerStateMachine: BreakTimerStateMachine
+    private var tickTask: Task<Void, Never>?
+
+    init(
+        notificationService: NotificationPermissionService = .init(),
+        timerPersistenceService: TimerPersistenceService = .init(),
+        overlayWindowManager: OverlayWindowManager = .init(),
+        timerConfiguration: BreakTimerConfiguration = .default
+    ) {
         self.notificationService = notificationService
+        self.timerPersistenceService = timerPersistenceService
+        self.overlayWindowManager = overlayWindowManager
+
+        let restoredSnapshot = timerPersistenceService.load()
+        let restoredConfiguration = restoredSnapshot?.configuration ?? timerConfiguration
+
+        timerWorkDurationMinutes = max(1, restoredConfiguration.workDurationSeconds / 60)
+        timerBreakDurationSeconds = max(5, restoredConfiguration.breakDurationSeconds)
+
+        if let restoredSnapshot {
+            timerStateMachine = BreakTimerStateMachine(
+                configuration: restoredSnapshot.configuration,
+                state: restoredSnapshot.state
+            )
+            lastActionMessage = "Timer restored from last session"
+        } else {
+            timerStateMachine = BreakTimerStateMachine(configuration: restoredConfiguration)
+        }
+
+        syncTimerStateFromMachine()
+        updateTickLoop()
+
+        if let restoredSnapshot {
+            logger.info(
+                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) break_seconds=\(restoredSnapshot.configuration.breakDurationSeconds, privacy: .public)"
+            )
+        }
+
         Task { [weak self] in
             await self?.refreshNotificationStatus()
         }
@@ -61,9 +143,161 @@ final class AppState: ObservableObject {
         }
     }
 
+    func startTimer() {
+        logger.info("action_timer_start")
+        if applyTimerEvent(.start) {
+            lastActionMessage = "Timer started"
+        } else {
+            lastActionMessage = "Start ignored for current timer state"
+        }
+    }
+
+    func pauseTimer() {
+        logger.info("action_timer_pause")
+        if applyTimerEvent(.pause) {
+            lastActionMessage = "Timer paused"
+        } else {
+            lastActionMessage = "Pause ignored for current timer state"
+        }
+    }
+
+    func resumeTimer() {
+        logger.info("action_timer_resume")
+        if applyTimerEvent(.resume) {
+            lastActionMessage = "Timer resumed"
+        } else {
+            lastActionMessage = "Resume ignored for current timer state"
+        }
+    }
+
+    func takeBreakNow() {
+        logger.info("action_timer_take_break_now")
+        if applyTimerEvent(.forceBreak) {
+            lastActionMessage = "Break started"
+        } else {
+            lastActionMessage = "Take break ignored for current timer state"
+        }
+    }
+
+    func resetTimer() {
+        logger.info("action_timer_reset")
+        if applyTimerEvent(.reset) {
+            lastActionMessage = "Timer reset"
+        } else {
+            lastActionMessage = "Reset ignored for current timer state"
+        }
+    }
+
+    func showOverlayPreview() {
+        logger.info("action_show_overlay_preview")
+        overlayWindowManager.showPreviewOverlay()
+        lastActionMessage = "Overlay preview shown"
+    }
+
+    func hideOverlay() {
+        logger.info("action_hide_overlay")
+        overlayWindowManager.hideOverlay()
+        lastActionMessage = "Overlay hidden"
+    }
+
+    func applyTimerSettings() {
+        guard canApplyTimerSettings else {
+            lastActionMessage = "Stop timer before applying settings"
+            return
+        }
+
+        let workMinutes = max(1, timerWorkDurationMinutes)
+        let breakSeconds = max(5, timerBreakDurationSeconds)
+        timerWorkDurationMinutes = workMinutes
+        timerBreakDurationSeconds = breakSeconds
+
+        let configuration = BreakTimerConfiguration(
+            workDurationSeconds: workMinutes * 60,
+            breakDurationSeconds: breakSeconds
+        )
+        timerStateMachine = BreakTimerStateMachine(configuration: configuration)
+        syncTimerStateFromMachine()
+        updateTickLoop()
+        persistTimerSnapshot()
+
+        logger.info(
+            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) break_seconds=\(breakSeconds, privacy: .public)"
+        )
+        lastActionMessage = "Timer settings updated"
+    }
+
     func refreshNotificationStatus() async {
         let status = await notificationService.currentStatus()
         notificationStatus = status
         logger.info("notification_status=\(status.rawValue)")
+    }
+
+    private func handleTick() {
+        _ = applyTimerEvent(.tick)
+    }
+
+    @discardableResult
+    private func applyTimerEvent(_ event: BreakTimerStateMachine.Event) -> Bool {
+        let previousState = timerStateMachine.stateDescription
+        let changed = timerStateMachine.handle(event)
+
+        if changed {
+            syncTimerStateFromMachine()
+            let currentState = timerStateMachine.stateDescription
+            logger.info(
+                "timer_transition event=\(event.rawValue, privacy: .public) from=\(previousState, privacy: .public) to=\(currentState, privacy: .public)"
+            )
+            updateTickLoop()
+            persistTimerSnapshot()
+        } else {
+            logger.info(
+                "timer_event_ignored event=\(event.rawValue, privacy: .public) state=\(previousState, privacy: .public)"
+            )
+        }
+
+        return changed
+    }
+
+    private func syncTimerStateFromMachine() {
+        timerMode = timerStateMachine.mode
+        timerRemainingSeconds = timerStateMachine.remainingSeconds
+    }
+
+    private func updateTickLoop() {
+        let shouldTick = timerMode == .running || timerMode == .takingBreak
+
+        if shouldTick {
+            guard tickTask == nil else {
+                return
+            }
+
+            tickTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    self?.handleTick()
+                }
+            }
+            return
+        }
+
+        tickTask?.cancel()
+        tickTask = nil
+    }
+
+    private static func formatDuration(_ totalSeconds: Int) -> String {
+        let bounded = max(0, totalSeconds)
+        let minutes = bounded / 60
+        let seconds = bounded % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func persistTimerSnapshot() {
+        timerPersistenceService.save(
+            configuration: timerStateMachine.configuration,
+            state: timerStateMachine.state
+        )
     }
 }

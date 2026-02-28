@@ -8,16 +8,23 @@
 5. Rough grammar in task names and descriptions is acceptable, clarity first.
 
 ## Overall Status
-- Overall Status: `Not Started`
-- Current Phase: `Phase 1 - foundation shell (target: Week 1)`
+- Overall Status: `In Progress`
+- Current Phase: `Phase 3 - break overlay (target: Week 3) [while P1 notification blocker remains]`
 - Blockers:
-  - `None`
+  - `2026-02-28` - `P1-T1/P1-T5`: current Xcode run mode launches a bare executable, not a bundled `.app`; `UNUserNotificationCenter` cannot initialize.
 - Decision Log:
   - `2026-02-28`: Sprint size set to 1-week micro-phases.
   - `2026-02-28`: Task format set to checklist + estimate + dependencies + DoD.
   - `2026-02-28`: Scope set to MVP execution + explicit post-MVP backlog.
   - `2026-02-28`: Single source tracking file set to `docs/PROJECT_TASKS.md`.
   - `2026-02-28`: Target platform baseline set to macOS 13+ (SwiftUI native).
+  - `2026-02-28`: Settings open action uses `SettingsLink` on macOS 14+ with legacy fallback on macOS 13.
+  - `2026-02-28`: Notification service guarded to bundled `.app` context to prevent `UNUserNotificationCenter` assertion crash.
+  - `2026-02-28`: Implemented timer state machine (`idle/running/paused/takingBreak`) and wired menu actions (`start/pause/resume/take break/reset`).
+  - `2026-02-28`: Added `swift test` coverage for timer boundaries and 2-hour drift simulation (7 passing tests).
+  - `2026-02-28`: Added timer persistence (`UserDefaults`) and restart restore path for configuration + checkpointed state.
+  - `2026-02-28`: Added AppState persistence integration tests; full test suite now 12 passing tests.
+  - `2026-02-28`: Started Phase 3 with per-display overlay window manager scaffold and menu preview controls.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -48,19 +55,19 @@ Tasks:
   Dependencies: `None`  
   Definition of Done: clean checkout builds and app binary has expected bundle identifiers.
 
-- [ ] `P1-T2` menubar extra + app lifecycle wire  
+- [x] `P1-T2` menubar extra + app lifecycle wire  
   Description: wire `MenuBarExtra`, startup lifecycle, and process model as menu bar utility app.  
   Estimate: `5h`  
   Dependencies: `P1-T1`  
   Definition of Done: app runs as menu bar app and lifecycle hooks log startup/shutdown events.
 
-- [ ] `P1-T3` settings window tabs skeleton (General/Breaks/Advanced placeholders)  
+- [x] `P1-T3` settings window tabs skeleton (General/Breaks/Advanced placeholders)  
   Description: create settings window with 3 tabs and placeholder content blocks for future features.  
   Estimate: `4h`  
   Dependencies: `P1-T1`  
   Definition of Done: settings window opens from menu and tab switching works without crashes.
 
-- [ ] `P1-T4` local logging utility for timer + state transitions  
+- [x] `P1-T4` local logging utility for timer + state transitions  
   Description: add lightweight structured logger for app state and timer transition debugging.  
   Estimate: `4h`  
   Dependencies: `P1-T2`  
@@ -73,9 +80,9 @@ Tasks:
   Definition of Done: permission prompt can be triggered and status is visible in debug logs.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Menu bar + settings + lifecycle scaffolding came together quickly with low churn.`  
+slowed: `Notification permission depends on bundled app execution context; bare package launch path blocks prompt.`  
+next fix: `Create/validate true macOS app target and re-run permission flow in bundled context.`
 
 ## Phase 2 - timer core short break (target: Week 2)
 Goal: reliable 20-20-20 timer flow with pause/resume.
@@ -83,40 +90,40 @@ Goal: reliable 20-20-20 timer flow with pause/resume.
 Exit Criteria: short break starts on interval and timer state survives app restart.
 
 Tasks:
-- [ ] `P2-T1` timer engine state machine (`running/paused/break/idle`)  
+- [x] `P2-T1` timer engine state machine (`running/paused/break/idle`)  
   Description: implement deterministic timer state machine with transition guards and explicit events.  
   Estimate: `6h`  
   Dependencies: `P1-T2`  
   Definition of Done: state machine can run through all core states in unit-level simulation.
 
-- [ ] `P2-T2` short break config model + defaults  
+- [x] `P2-T2` short break config model + defaults  
   Description: model interval/duration defaults for 20-20-20 and expose mutable settings object.  
   Estimate: `4h`  
   Dependencies: `P2-T1`  
   Definition of Done: defaults load on first run and changed values reflect in active timer logic.
 
-- [ ] `P2-T3` persistence via `UserDefaults`  
+- [x] `P2-T3` persistence via `UserDefaults`  
   Description: persist timer and settings state needed for app restart continuity.  
   Estimate: `4h`  
   Dependencies: `P2-T2`  
   Definition of Done: app restart restores active configuration and last safe timer checkpoint.
 
-- [ ] `P2-T4` pause/resume/manual start next break actions  
+- [x] `P2-T4` pause/resume/manual start next break actions  
   Description: add command handlers for pause, resume, and forcing next break from menu actions.  
   Estimate: `4h`  
   Dependencies: `P2-T1`  
   Definition of Done: each action updates state machine correctly and logs event source.
 
-- [ ] `P2-T5` unit tests for timer math drift + boundary behavior  
+- [x] `P2-T5` unit tests for timer math drift + boundary behavior  
   Description: build tests for interval drift, near-zero countdown edge, and pause/resume boundaries.  
   Estimate: `5h`  
   Dependencies: `P2-T1, P2-T4`  
   Definition of Done: tests pass and prove no cumulative drift beyond 1 second in 2-hour simulation.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Timer engine, controls, and settings came together quickly once state transitions were explicit and logged.`  
+slowed: `Phase 2 ran in parallel while bundled app target setup from Phase 1 remains pending.`  
+next fix: `Start Phase 3 overlay window manager and keep notification blocker isolated until bundled target is ready.`
 
 ## Phase 3 - break overlay (target: Week 3)
 Goal: full-screen blur/overlay with countdown for break sessions.

@@ -14,6 +14,11 @@ let package = Package(
         .executableTarget(
             name: "Mixo",
             path: "Sources/Mixo"
+        ),
+        .testTarget(
+            name: "MixoTests",
+            dependencies: ["Mixo"],
+            path: "Tests/MixoTests"
         )
     ]
 )

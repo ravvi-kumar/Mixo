@@ -33,17 +33,17 @@ Out of scope this sprint:
   - Depends: `None`
   - Done means: buildable app target scaffold exists and identifiers configured.
 
-- [ ] `P1-T2` menubar extra + app lifecycle wire
+- [x] `P1-T2` menubar extra + app lifecycle wire
   - Est: `5h`
   - Depends: `P1-T1`
   - Done means: menu bar app runs and lifecycle events logged.
 
-- [ ] `P1-T3` settings tabs skeleton
+- [x] `P1-T3` settings tabs skeleton
   - Est: `4h`
   - Depends: `P1-T1`
   - Done means: settings window opens and tab switch works.
 
-- [ ] `P1-T4` local logging utility
+- [x] `P1-T4` local logging utility
   - Est: `4h`
   - Depends: `P1-T2`
   - Done means: timer/state/lifecycle logs have timestamp + subsystem labels.
@@ -56,55 +56,55 @@ Out of scope this sprint:
 ## Daily Execution Checklist
 
 ### Day 1 - boot and base app shell
-- [ ] Create project scaffold and folder conventions.
-- [ ] Add menu bar app entrypoint.
-- [ ] Validate app launches from local machine.
-- [ ] Log note in daily log.
+- [x] Create project scaffold and folder conventions.
+- [x] Add menu bar app entrypoint.
+- [x] Validate app launches from local machine.
+- [x] Log note in daily log.
 
 ### Day 2 - settings skeleton
-- [ ] Add settings scene and 3 tabs placeholders.
-- [ ] Add open settings action from menu bar.
-- [ ] Verify tab switch and window lifecycle.
-- [ ] Log note in daily log.
+- [x] Add settings scene and 3 tabs placeholders.
+- [x] Add open settings action from menu bar.
+- [x] Verify tab switch and window lifecycle.
+- [x] Log note in daily log.
 
 ### Day 3 - logging utility
-- [ ] Add structured logger wrapper.
-- [ ] Instrument startup/shutdown and menu actions.
-- [ ] Verify log lines format is consistent.
-- [ ] Log note in daily log.
+- [x] Add structured logger wrapper.
+- [x] Instrument startup/shutdown and menu actions.
+- [x] Verify log lines format is consistent.
+- [x] Log note in daily log.
 
 ### Day 4 - notification permission flow
-- [ ] Add permission service and state model.
-- [ ] Add menu action to request permission.
-- [ ] Surface current permission status in UI.
-- [ ] Log note in daily log.
+- [x] Add permission service and state model.
+- [x] Add menu action to request permission.
+- [x] Surface current permission status in UI.
+- [x] Log note in daily log.
 
 ### Day 5 - harden and sprint close
-- [ ] Run clean build and launch check.
-- [ ] Run Phase 1 exit criteria checklist.
-- [ ] Update `docs/PROJECT_TASKS.md` checkboxes and retro note.
+- [x] Run clean build and launch check.
+- [x] Run Phase 1 exit criteria checklist.
+- [x] Update `docs/PROJECT_TASKS.md` checkboxes and retro note.
 - [ ] Write sprint retro bullets.
 
 ## Verification Checklist (Run Before Marking Done)
-- [ ] Build command succeeds from clean state.
-- [ ] Menu bar icon appears within 3 seconds of launch.
-- [ ] Settings window opens from menu command.
-- [ ] All settings tabs render without crash.
+- [x] Build command succeeds from clean state.
+- [x] Menu bar icon appears within 3 seconds of launch.
+- [x] Settings window opens from menu command.
+- [x] All settings tabs render without crash.
 - [ ] Notification prompt can be triggered.
 - [ ] Permission state updates after user choice.
-- [ ] Lifecycle logs show startup/shutdown.
+- [x] Lifecycle logs show startup/shutdown.
 
 ## Blockers
-- `None` (update with owner + date when blocked > 1 day)
+- `2026-02-28` - `P1-T1/P1-T5` blocked in current run mode: app is launched as a bare executable (not bundled `.app`), so `UNUserNotificationCenter` cannot initialize. Owner: `Ravi + Codex`.
 
 ## Daily Log
 Use this section every day; keep short.
 
-### YYYY-MM-DD
-- Focus:
-- Done:
-- Issues:
-- Next:
+### 2026-02-28
+- Focus: Phase 1 shell completion and notification permission path.
+- Done: Menu bar app shell, settings tabs, lifecycle logs, settings open flow, and permission state UI/logging are implemented; build is green.
+- Issues: Permission prompt remains blocked in non-bundled execution context from current Xcode run mode.
+- Next: Create/run via real macOS app target (`.app`) and close `P1-T1/P1-T5`.
 
 ### YYYY-MM-DD
 - Focus:
