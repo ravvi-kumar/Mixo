@@ -1,8 +1,11 @@
 .DS_Store
-/.build
-/Packages
-xcuserdata/
+
+# Swift/Xcode build artifacts
+.build/
 DerivedData/
-.swiftpm/configuration/registries.json
-.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
-.netrc
+build/
+
+# Xcode user-specific metadata
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+xcuserdata/

@@ -111,14 +111,14 @@ final class AppState: ObservableObject {
     init(
         notificationService: NotificationPermissionService = .init(),
         timerPersistenceService: TimerPersistenceService = .init(),
-        overlayWindowManager: OverlayWindowManager = .init(),
-        breakChimeService: any BreakChimePlaying = BreakChimeService(),
+        overlayWindowManager: OverlayWindowManager? = nil,
+        breakChimeService: (any BreakChimePlaying)? = nil,
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
         self.notificationService = notificationService
         self.timerPersistenceService = timerPersistenceService
-        self.overlayWindowManager = overlayWindowManager
-        self.breakChimeService = breakChimeService
+        self.overlayWindowManager = overlayWindowManager ?? OverlayWindowManager()
+        self.breakChimeService = breakChimeService ?? BreakChimeService()
 
         let restoredSnapshot = timerPersistenceService.load()
         let restoredConfiguration = restoredSnapshot?.configuration ?? timerConfiguration
