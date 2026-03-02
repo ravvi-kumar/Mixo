@@ -175,9 +175,9 @@ final class AppState: ObservableObject {
                 _ = try await notificationService.requestAuthorization()
                 await refreshNotificationStatus()
                 lastActionMessage = "Notification permission updated"
-            } catch NotificationPermissionService.ServiceError.unsupportedExecutionContext {
-                logger.error("notification_permission_unsupported_context")
-                lastActionMessage = "Notifications require running from a bundled .app (not bare Xcode product)."
+            } catch let NotificationPermissionService.ServiceError.unsupportedExecutionContext(reason) {
+                logger.error("notification_permission_unsupported_context reason=\(reason, privacy: .public)")
+                lastActionMessage = reason
             } catch {
                 logger.error("notification_permission_error: \(String(describing: error), privacy: .public)")
                 lastActionMessage = "Notification permission request failed"
@@ -321,6 +321,11 @@ final class AppState: ObservableObject {
             updateTickLoop()
             updateOverlayForTimerState()
             persistTimerSnapshot()
+
+            if previousMode != .takingBreak, timerMode == .takingBreak {
+                breakChimeService.playBreakStartChime()
+                logger.info("break_started")
+            }
 
             if previousMode == .takingBreak, timerMode == .running {
                 breakChimeService.playBreakEndChime()

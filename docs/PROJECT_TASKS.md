@@ -35,6 +35,9 @@
   - `2026-03-03`: Implemented Phase 4 policy modes (`skip-anytime`, `skip-after-delay`, `lock`) with state-machine guards and skip elapsed tracking.
   - `2026-03-03`: Wired policy settings and menu actions (`Skip Break` availability + lock-mode hide during active break) and persisted policy metadata.
   - `2026-03-03`: Expanded transition and persistence tests for all Phase 4 policy paths; suite now passes with 18 tests.
+  - `2026-03-03`: Added break-start chime playback on transitions into break mode, keeping break-end chime behavior intact.
+  - `2026-03-03`: Added temporary bundled-app runner (`scripts/run_bundled_app.sh`) and setup guide (`docs/NOTIFICATION_SETUP.md`) so notification permission can be tested from a valid `.app` context.
+  - `2026-03-03`: Fixed bundled-app startup crash in notification status fetch by removing invalid actor-bound callback path in `NotificationPermissionService`.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
