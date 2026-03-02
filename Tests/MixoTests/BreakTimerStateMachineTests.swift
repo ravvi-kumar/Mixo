@@ -65,6 +65,75 @@ final class BreakTimerStateMachineTests: XCTestCase {
         XCTAssertEqual(machine.state, .running(remaining: 10))
     }
 
+    func testSkipAnytimeAllowsImmediateBreakSkip() {
+        var machine = makeMachine(work: 10, rest: 5, policy: .skipAnytime)
+        XCTAssertTrue(machine.handle(.start))
+        XCTAssertTrue(machine.handle(.forceBreak))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 5))
+        XCTAssertTrue(machine.canSkipBreak)
+
+        XCTAssertTrue(machine.handle(.skipBreak))
+        XCTAssertEqual(machine.state, .running(remaining: 10))
+        XCTAssertEqual(machine.breakElapsedSeconds, 0)
+    }
+
+    func testSkipAfterDelayBlocksUntilDelayElapses() {
+        var machine = makeMachine(work: 10, rest: 5, policy: .skipAfterDelay, skipDelay: 2)
+        XCTAssertTrue(machine.handle(.start))
+        XCTAssertTrue(machine.handle(.forceBreak))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 5))
+        XCTAssertFalse(machine.canSkipBreak)
+        XCTAssertFalse(machine.handle(.skipBreak))
+
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 4))
+        XCTAssertEqual(machine.breakElapsedSeconds, 1)
+        XCTAssertFalse(machine.canSkipBreak)
+        XCTAssertFalse(machine.handle(.skipBreak))
+
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 3))
+        XCTAssertEqual(machine.breakElapsedSeconds, 2)
+        XCTAssertTrue(machine.canSkipBreak)
+        XCTAssertTrue(machine.handle(.skipBreak))
+        XCTAssertEqual(machine.state, .running(remaining: 10))
+    }
+
+    func testLockModeNeverAllowsSkipButAllowsEmergencyDismiss() {
+        var machine = makeMachine(work: 10, rest: 5, policy: .lock)
+        XCTAssertTrue(machine.handle(.start))
+        XCTAssertTrue(machine.handle(.forceBreak))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 5))
+
+        XCTAssertFalse(machine.canSkipBreak)
+        XCTAssertFalse(machine.handle(.skipBreak))
+        XCTAssertTrue(machine.handle(.dismissBreak))
+        XCTAssertEqual(machine.state, .running(remaining: 10))
+    }
+
+    func testLongBreakTriggersOnConfiguredCadence() {
+        var machine = makeMachine(work: 2, rest: 3, longRest: 9, longEvery: 2)
+        XCTAssertTrue(machine.handle(.start))
+
+        // Work cycle 1 -> short break.
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 3))
+        XCTAssertFalse(machine.isLongBreakActive)
+
+        // Finish short break.
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertEqual(machine.state, .running(remaining: 2))
+
+        // Work cycle 2 -> long break.
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertTrue(machine.handle(.tick))
+        XCTAssertEqual(machine.state, .takingBreak(remaining: 9))
+        XCTAssertTrue(machine.isLongBreakActive)
+    }
+
     func testResetReturnsToIdleFromAnyState() {
         var running = makeMachine(work: 5, rest: 2)
         XCTAssertTrue(running.handle(.start))
@@ -110,7 +179,7 @@ final class BreakTimerStateMachineTests: XCTestCase {
         let twoHours = 2 * 60 * 60
         let cycleLength = work + rest
 
-        var machine = makeMachine(work: work, rest: rest)
+        var machine = makeMachine(work: work, rest: rest, longRest: 120, longEvery: 1000)
         XCTAssertTrue(machine.handle(.start))
 
         for _ in 0..<twoHours {
@@ -127,11 +196,22 @@ final class BreakTimerStateMachineTests: XCTestCase {
         XCTAssertEqual(machine.state, .running(remaining: 100))
     }
 
-    private func makeMachine(work: Int, rest: Int) -> BreakTimerStateMachine {
+    private func makeMachine(
+        work: Int,
+        rest: Int,
+        longRest: Int = 120,
+        longEvery: Int = 4,
+        policy: BreakPolicyMode = .skipAnytime,
+        skipDelay: Int = 10
+    ) -> BreakTimerStateMachine {
         BreakTimerStateMachine(
             configuration: BreakTimerConfiguration(
                 workDurationSeconds: work,
-                breakDurationSeconds: rest
+                breakDurationSeconds: rest,
+                longBreakDurationSeconds: longRest,
+                longBreakEveryShortBreaks: longEvery,
+                breakPolicyMode: policy,
+                skipDelaySeconds: skipDelay
             )
         )
     }

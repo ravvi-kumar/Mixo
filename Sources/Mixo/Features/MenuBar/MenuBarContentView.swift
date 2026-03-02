@@ -18,6 +18,7 @@ struct MenuBarContentView: View {
             LabeledContent("Notifications", value: appState.notificationStatusDisplay)
             LabeledContent("Timer", value: appState.timerModeDisplay)
             LabeledContent("Countdown", value: appState.timerRemainingDisplay)
+            LabeledContent("Break Policy", value: appState.breakPolicyModeDisplay)
 
             Text(appState.lastActionMessage)
                 .font(.caption2)
@@ -60,6 +61,13 @@ struct MenuBarContentView: View {
                 appState.takeBreakNow()
             }
             .disabled(!appState.canTakeBreakNow)
+
+            if appState.shouldShowSkipBreakAction {
+                Button("Skip Break") {
+                    appState.skipBreak()
+                }
+                .disabled(!appState.canSkipBreak)
+            }
 
             Button("Reset Timer") {
                 appState.resetTimer()

@@ -9,6 +9,10 @@ final class AppState: ObservableObject {
     @Published var timerRemainingSeconds: Int = 0
     @Published var timerWorkDurationMinutes: Int
     @Published var timerBreakDurationSeconds: Int
+    @Published var timerLongBreakDurationMinutes: Int
+    @Published var timerLongBreakEveryShortBreaks: Int
+    @Published var timerBreakPolicyMode: BreakPolicyMode
+    @Published var timerSkipDelaySeconds: Int
     @Published var lastActionMessage = "App started"
 
     var menuBarLabel: String {
@@ -41,12 +45,27 @@ final class AppState: ObservableObject {
         case .paused:
             return "Paused"
         case .takingBreak:
-            return "Break"
+            return timerStateMachine.isLongBreakActive ? "Long Break" : "Break"
         }
     }
 
     var timerRemainingDisplay: String {
         Self.formatDuration(timerRemainingSeconds)
+    }
+
+    var shortBreaksUntilLongBreakDisplay: String {
+        String(timerStateMachine.shortBreaksUntilLongBreak)
+    }
+
+    var breakPolicyModeDisplay: String {
+        switch timerStateMachine.configuration.breakPolicyMode {
+        case .skipAnytime:
+            return "Skip Anytime"
+        case .skipAfterDelay:
+            return "Skip After Delay"
+        case .lock:
+            return "Lock"
+        }
     }
 
     var canStartTimer: Bool {
@@ -63,6 +82,14 @@ final class AppState: ObservableObject {
 
     var canTakeBreakNow: Bool {
         timerMode == .running || timerMode == .paused
+    }
+
+    var canSkipBreak: Bool {
+        timerStateMachine.canSkipBreak
+    }
+
+    var shouldShowSkipBreakAction: Bool {
+        !(timerMode == .takingBreak && timerStateMachine.configuration.breakPolicyMode == .lock)
     }
 
     var canResetTimer: Bool {
@@ -98,11 +125,18 @@ final class AppState: ObservableObject {
 
         timerWorkDurationMinutes = max(1, restoredConfiguration.workDurationSeconds / 60)
         timerBreakDurationSeconds = max(5, restoredConfiguration.breakDurationSeconds)
+        timerLongBreakDurationMinutes = max(1, restoredConfiguration.longBreakDurationSeconds / 60)
+        timerLongBreakEveryShortBreaks = max(1, restoredConfiguration.longBreakEveryShortBreaks)
+        timerBreakPolicyMode = restoredConfiguration.breakPolicyMode
+        timerSkipDelaySeconds = max(0, restoredConfiguration.skipDelaySeconds)
 
         if let restoredSnapshot {
             timerStateMachine = BreakTimerStateMachine(
                 configuration: restoredSnapshot.configuration,
-                state: restoredSnapshot.state
+                state: restoredSnapshot.state,
+                shortBreaksSinceLongBreak: restoredSnapshot.shortBreaksSinceLongBreak,
+                currentBreakIsLong: restoredSnapshot.currentBreakIsLong,
+                breakElapsedSeconds: restoredSnapshot.breakElapsedSeconds
             )
             lastActionMessage = "Timer restored from last session"
         } else {
@@ -115,7 +149,7 @@ final class AppState: ObservableObject {
 
         if let restoredSnapshot {
             logger.info(
-                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) break_seconds=\(restoredSnapshot.configuration.breakDurationSeconds, privacy: .public)"
+                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public)"
             )
         }
 
@@ -196,6 +230,15 @@ final class AppState: ObservableObject {
         }
     }
 
+    func skipBreak() {
+        logger.info("action_timer_skip_break")
+        if applyTimerEvent(.skipBreak) {
+            lastActionMessage = "Break skipped"
+        } else {
+            lastActionMessage = "Skip break unavailable in current state"
+        }
+    }
+
     func showOverlayPreview() {
         logger.info("action_show_overlay_preview")
         overlayWindowManager.showPreviewOverlay()
@@ -224,12 +267,22 @@ final class AppState: ObservableObject {
 
         let workMinutes = max(1, timerWorkDurationMinutes)
         let breakSeconds = max(5, timerBreakDurationSeconds)
+        let longBreakMinutes = max(1, timerLongBreakDurationMinutes)
+        let longBreakEvery = max(1, timerLongBreakEveryShortBreaks)
+        let skipDelaySeconds = max(0, timerSkipDelaySeconds)
         timerWorkDurationMinutes = workMinutes
         timerBreakDurationSeconds = breakSeconds
+        timerLongBreakDurationMinutes = longBreakMinutes
+        timerLongBreakEveryShortBreaks = longBreakEvery
+        timerSkipDelaySeconds = skipDelaySeconds
 
         let configuration = BreakTimerConfiguration(
             workDurationSeconds: workMinutes * 60,
-            breakDurationSeconds: breakSeconds
+            breakDurationSeconds: breakSeconds,
+            longBreakDurationSeconds: longBreakMinutes * 60,
+            longBreakEveryShortBreaks: longBreakEvery,
+            breakPolicyMode: timerBreakPolicyMode,
+            skipDelaySeconds: skipDelaySeconds
         )
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
@@ -238,7 +291,7 @@ final class AppState: ObservableObject {
         persistTimerSnapshot()
 
         logger.info(
-            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) break_seconds=\(breakSeconds, privacy: .public)"
+            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public)"
         )
         lastActionMessage = "Timer settings updated"
     }
@@ -319,10 +372,7 @@ final class AppState: ObservableObject {
     }
 
     private func persistTimerSnapshot() {
-        timerPersistenceService.save(
-            configuration: timerStateMachine.configuration,
-            state: timerStateMachine.state
-        )
+        timerPersistenceService.save(machine: timerStateMachine)
     }
 
     private func updateOverlayForTimerState() {

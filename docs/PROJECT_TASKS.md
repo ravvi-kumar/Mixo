@@ -9,7 +9,7 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 4 - long breaks + skip/delay/lock (target: Week 4) [while P1 notification blocker remains]`
+- Current Phase: `Phase 5 - notifications + pre-break heads-up (target: Week 5) [P1 notification blocker still open]`
 - Blockers:
   - `2026-02-28` - `P1-T1/P1-T5`: current Xcode run mode launches a bare executable, not a bundled `.app`; `UNUserNotificationCenter` cannot initialize.
 - Decision Log:
@@ -31,6 +31,10 @@
   - `2026-02-28`: User validated overlay flow as working; remaining Phase 3 work is dual-monitor/accessibility QA (`P3-T5`).
   - `2026-02-28`: Added overlay diagnostics action and checklist file `docs/OVERLAY_QA_CHECKLIST.md` to standardize Phase 3 validation.
   - `2026-02-28`: User validated Phase 3 overlay QA as working; Phase 3 tasks closed and moved focus to Phase 4 scheduler/policy work.
+  - `2026-02-28`: Implemented long-break cadence scheduler (`P4-T1`) with configurable long-break duration and every-N-short-breaks ratio, plus persistence/test coverage updates.
+  - `2026-03-03`: Implemented Phase 4 policy modes (`skip-anytime`, `skip-after-delay`, `lock`) with state-machine guards and skip elapsed tracking.
+  - `2026-03-03`: Wired policy settings and menu actions (`Skip Break` availability + lock-mode hide during active break) and persisted policy metadata.
+  - `2026-03-03`: Expanded transition and persistence tests for all Phase 4 policy paths; suite now passes with 18 tests.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -178,40 +182,40 @@ Goal: support long break cadence and enforcement policy modes.
 Exit Criteria: short and long break schedule works with skip-anytime, skip-after-delay, and lock mode.
 
 Tasks:
-- [ ] `P4-T1` long break scheduler and ratio config  
+- [x] `P4-T1` long break scheduler and ratio config  
   Description: add long break cadence model (example every N short breaks) and config controls.  
   Estimate: `5h`  
   Dependencies: `P2-T1, P2-T2`  
   Definition of Done: scheduler can trigger long break on configured ratio with deterministic behavior.
 
-- [ ] `P4-T2` skip anytime mode  
+- [x] `P4-T2` skip anytime mode  
   Description: implement unrestricted skip policy and reset logic after user skips a break.  
   Estimate: `4h`  
   Dependencies: `P4-T1`  
   Definition of Done: skip action always available and timer re-enters running state correctly.
 
-- [ ] `P4-T3` skip after delay mode  
+- [x] `P4-T3` skip after delay mode  
   Description: enforce minimum lock period before skip becomes available on break UI.  
   Estimate: `4h`  
   Dependencies: `P4-T1`  
   Definition of Done: skip button stays disabled until configured delay elapses.
 
-- [ ] `P4-T4` lock break mode (no skip UI)  
+- [x] `P4-T4` lock break mode (no skip UI)  
   Description: hide skip controls entirely while break active unless emergency escape used.  
   Estimate: `4h`  
   Dependencies: `P4-T1`  
   Definition of Done: no normal skip path exists in lock mode during active break.
 
-- [ ] `P4-T5` state transition tests across all modes  
+- [x] `P4-T5` state transition tests across all modes  
   Description: test scheduler + policy combinations for invalid transitions and stuck states.  
   Estimate: `5h`  
   Dependencies: `P4-T2, P4-T3, P4-T4`  
   Definition of Done: tests cover all policy modes and pass with no transition deadlocks.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Policy behavior stayed deterministic once skip rules lived in the state machine and UI bound to policy guards.`  
+slowed: `Notification flow remains blocked by bare executable launch context (UNUserNotificationCenter unsupported).`  
+next fix: `Complete bundled .app target/run path, then execute Phase 5 notification tasks.`
 
 ## Phase 5 - notifications and heads-up (target: Week 5)
 Goal: add pre-break warning and postpone controls.

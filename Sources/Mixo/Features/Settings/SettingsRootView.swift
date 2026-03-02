@@ -49,6 +49,8 @@ struct SettingsRootView: View {
 
             LabeledContent("Timer State", value: appState.timerModeDisplay)
             LabeledContent("Current Countdown", value: appState.timerRemainingDisplay)
+            LabeledContent("Short Breaks Until Long Break", value: appState.shortBreaksUntilLongBreakDisplay)
+            LabeledContent("Active Break Policy", value: appState.breakPolicyModeDisplay)
 
             Stepper(
                 "Work Duration: \(appState.timerWorkDurationMinutes) min",
@@ -62,6 +64,39 @@ struct SettingsRootView: View {
                 in: 5 ... 600,
                 step: 5
             )
+
+            Stepper(
+                "Long Break Duration: \(appState.timerLongBreakDurationMinutes) min",
+                value: $appState.timerLongBreakDurationMinutes,
+                in: 1 ... 60
+            )
+
+            Stepper(
+                "Long Break Every: \(appState.timerLongBreakEveryShortBreaks) short breaks",
+                value: $appState.timerLongBreakEveryShortBreaks,
+                in: 1 ... 12
+            )
+
+            Picker("Break Policy", selection: $appState.timerBreakPolicyMode) {
+                ForEach(BreakPolicyMode.allCases, id: \.self) { mode in
+                    Text(policyLabel(for: mode)).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Stepper(
+                "Skip Delay: \(appState.timerSkipDelaySeconds) sec",
+                value: $appState.timerSkipDelaySeconds,
+                in: 0 ... 300,
+                step: 5
+            )
+            .disabled(appState.timerBreakPolicyMode != .skipAfterDelay)
+
+            if appState.timerBreakPolicyMode != .skipAfterDelay {
+                Text("Skip delay is used only in Skip After Delay mode.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Button("Apply Timer Settings") {
                 appState.applyTimerSettings()
@@ -99,5 +134,16 @@ struct SettingsRootView: View {
             Spacer()
         }
         .padding(24)
+    }
+
+    private func policyLabel(for mode: BreakPolicyMode) -> String {
+        switch mode {
+        case .skipAnytime:
+            return "Skip Anytime"
+        case .skipAfterDelay:
+            return "Skip After Delay"
+        case .lock:
+            return "Lock"
+        }
     }
 }
