@@ -111,6 +111,25 @@ final class BreakTimerStateMachineTests: XCTestCase {
         XCTAssertEqual(machine.state, .running(remaining: 10))
     }
 
+    func testDelayUpcomingBreakExtendsRunningOrPausedCountdown() {
+        var runningMachine = makeMachine(work: 10, rest: 5)
+        XCTAssertTrue(runningMachine.handle(.start))
+        XCTAssertTrue(runningMachine.delayUpcomingBreak(by: 120))
+        XCTAssertEqual(runningMachine.state, .running(remaining: 130))
+
+        var pausedMachine = makeMachine(work: 10, rest: 5)
+        XCTAssertTrue(pausedMachine.handle(.start))
+        XCTAssertTrue(pausedMachine.handle(.pause))
+        XCTAssertTrue(pausedMachine.delayUpcomingBreak(by: 90))
+        XCTAssertEqual(pausedMachine.state, .paused(remaining: 100))
+
+        var breakingMachine = makeMachine(work: 10, rest: 5)
+        XCTAssertTrue(breakingMachine.handle(.start))
+        XCTAssertTrue(breakingMachine.handle(.forceBreak))
+        XCTAssertFalse(breakingMachine.delayUpcomingBreak(by: 60))
+        XCTAssertEqual(breakingMachine.state, .takingBreak(remaining: 5))
+    }
+
     func testLongBreakTriggersOnConfiguredCadence() {
         var machine = makeMachine(work: 2, rest: 3, longRest: 9, longEvery: 2)
         XCTAssertTrue(machine.handle(.start))

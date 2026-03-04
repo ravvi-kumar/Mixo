@@ -98,6 +98,19 @@ struct SettingsRootView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Stepper(
+                "Heads-up Notification Lead Time: \(appState.timerPreBreakNotificationLeadTimeSeconds) sec",
+                value: $appState.timerPreBreakNotificationLeadTimeSeconds,
+                in: 0 ... 300,
+                step: 5
+            )
+
+            if appState.timerPreBreakNotificationLeadTimeSeconds == 0 {
+                Text("Heads-up notification is disabled when lead time is 0 seconds.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Button("Apply Timer Settings") {
                 appState.applyTimerSettings()
             }
@@ -126,6 +139,13 @@ struct SettingsRootView: View {
             Divider()
 
             LabeledContent("Notification Permission", value: appState.notificationStatusDisplay)
+            LabeledContent("Heads-up Fallback", value: appState.notificationFallbackStatusDisplay)
+
+            if let fallbackStatus = appState.notificationFallbackStatus {
+                Text(fallbackStatus)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
 
             Button("Request Notification Permission") {
                 appState.requestNotificationPermission()

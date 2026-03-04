@@ -19,6 +19,14 @@ struct MenuBarContentView: View {
             LabeledContent("Timer", value: appState.timerModeDisplay)
             LabeledContent("Countdown", value: appState.timerRemainingDisplay)
             LabeledContent("Break Policy", value: appState.breakPolicyModeDisplay)
+            LabeledContent("Heads-up Lead", value: appState.preBreakNotificationLeadTimeDisplay)
+            LabeledContent("Heads-up Fallback", value: appState.notificationFallbackStatusDisplay)
+
+            if let fallbackStatus = appState.notificationFallbackStatus {
+                Text(fallbackStatus)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
 
             Text(appState.lastActionMessage)
                 .font(.caption2)

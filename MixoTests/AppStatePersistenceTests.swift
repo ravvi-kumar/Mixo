@@ -16,7 +16,8 @@ final class AppStatePersistenceTests: XCTestCase {
             longBreakDurationSeconds: 8 * 60,
             longBreakEveryShortBreaks: 3,
             breakPolicyMode: .skipAfterDelay,
-            skipDelaySeconds: 35
+            skipDelaySeconds: 35,
+            preBreakNotificationLeadTimeSeconds: 50
         )
         let machine = BreakTimerStateMachine(
             configuration: savedConfiguration,
@@ -40,6 +41,7 @@ final class AppStatePersistenceTests: XCTestCase {
         XCTAssertEqual(appState.timerLongBreakEveryShortBreaks, 3)
         XCTAssertEqual(appState.timerBreakPolicyMode, .skipAfterDelay)
         XCTAssertEqual(appState.timerSkipDelaySeconds, 35)
+        XCTAssertEqual(appState.timerPreBreakNotificationLeadTimeSeconds, 50)
     }
 
     @MainActor

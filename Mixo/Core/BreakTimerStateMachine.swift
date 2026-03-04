@@ -13,6 +13,7 @@ struct BreakTimerConfiguration: Equatable {
     var longBreakEveryShortBreaks: Int
     var breakPolicyMode: BreakPolicyMode
     var skipDelaySeconds: Int
+    var preBreakNotificationLeadTimeSeconds: Int
 
     // Backward-compatible alias used by earlier code/tests.
     var breakDurationSeconds: Int {
@@ -26,7 +27,8 @@ struct BreakTimerConfiguration: Equatable {
         longBreakDurationSeconds: Int = 120,
         longBreakEveryShortBreaks: Int = 4,
         breakPolicyMode: BreakPolicyMode = .skipAnytime,
-        skipDelaySeconds: Int = 10
+        skipDelaySeconds: Int = 10,
+        preBreakNotificationLeadTimeSeconds: Int = 30
     ) {
         self.workDurationSeconds = max(1, workDurationSeconds)
         shortBreakDurationSeconds = max(1, breakDurationSeconds)
@@ -34,6 +36,7 @@ struct BreakTimerConfiguration: Equatable {
         self.longBreakEveryShortBreaks = max(1, longBreakEveryShortBreaks)
         self.breakPolicyMode = breakPolicyMode
         self.skipDelaySeconds = max(0, skipDelaySeconds)
+        self.preBreakNotificationLeadTimeSeconds = max(0, preBreakNotificationLeadTimeSeconds)
     }
 
     static let `default` = BreakTimerConfiguration(
@@ -147,6 +150,22 @@ struct BreakTimerStateMachine {
         case .skipAfterDelay:
             return breakElapsedSeconds >= configuration.skipDelaySeconds
         case .lock:
+            return false
+        }
+    }
+
+    @discardableResult
+    mutating func delayUpcomingBreak(by seconds: Int) -> Bool {
+        let boundedDelay = max(seconds, 1)
+
+        switch state {
+        case let .running(remaining):
+            state = .running(remaining: remaining + boundedDelay)
+            return true
+        case let .paused(remaining):
+            state = .paused(remaining: remaining + boundedDelay)
+            return true
+        case .idle, .takingBreak:
             return false
         }
     }

@@ -9,7 +9,7 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 5 - notifications + pre-break heads-up (target: Week 5)`
+- Current Phase: `Phase 6 - smart pause basic (target: Week 6)`
 - Blockers:
   - `None`
 - Decision Log:
@@ -40,6 +40,10 @@
   - `2026-03-03`: Fixed bundled-app startup crash in notification status fetch by removing invalid actor-bound callback path in `NotificationPermissionService`.
   - `2026-03-04`: Migrated repository to Xcode-native bundled app structure (`Mixo.xcodeproj` with `Mixo`, `MixoTests`, `MixoUITests`) while preserving existing git history.
   - `2026-03-04`: Notification permission flow validated as working in bundled app context; closed `P1-T1` and `P1-T5`.
+  - `2026-03-04`: Started Sprint 05 and implemented `P5-T1` pre-break heads-up lead-time setting with persisted config and transition-based reminder scheduling.
+  - `2026-03-04`: Implemented `P5-T2` actionable heads-up notifications (`Start now`, `Delay 5 min`) with delegate callback routing and app-state command handling; added unit tests for action behavior.
+  - `2026-03-04`: Completed Sprint 05 (`P5-T3`, `P5-T4`, `P5-T5`) with floating mini countdown surface, menu quick-break action confirmation, and notification fallback status in menu/settings.
+  - `2026-03-04`: Re-ran bundled Xcode test suite after Sprint 05 close; `MixoTests` passed (`** TEST SUCCEEDED **`, 23 tests).
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -228,40 +232,40 @@ Goal: add pre-break warning and postpone controls.
 Exit Criteria: heads-up notifications fire reliably and delay actions adjust schedule correctly.
 
 Tasks:
-- [ ] `P5-T1` pre-break notification timing setting  
+- [x] `P5-T1` pre-break notification timing setting  
   Description: add settings field for warning lead-time before short or long break starts.  
   Estimate: `4h`  
   Dependencies: `P1-T5, P2-T2`  
   Definition of Done: selected lead-time value drives actual notification scheduling.
 
-- [ ] `P5-T2` notification actions (`Start now`, `Delay`)  
+- [x] `P5-T2` notification actions (`Start now`, `Delay`)  
   Description: implement actionable notifications with fast start and postpone options.  
   Estimate: `5h`  
   Dependencies: `P5-T1`  
   Definition of Done: action clicks route to timer commands and state updates are logged.
 
-- [ ] `P5-T3` floating mini countdown near cursor/menu bar  
+- [x] `P5-T3` floating mini countdown near cursor/menu bar  
   Description: show tiny pre-break countdown indicator and keep it non-intrusive.  
   Estimate: `4h`  
   Dependencies: `P5-T1`  
   Definition of Done: mini countdown appears during warning window and auto-hides at break start.
 
-- [ ] `P5-T4` take break now quick action from menu  
+- [x] `P5-T4` take break now quick action from menu  
   Description: add immediate break trigger in menu for manual usage.  
   Estimate: `3h`  
   Dependencies: `P2-T4`  
   Definition of Done: selecting menu action starts break overlay instantly.
 
-- [ ] `P5-T5` notification delivery failure fallback path  
+- [x] `P5-T5` notification delivery failure fallback path  
   Description: add fallback UI signal when notification center drops or blocks reminder alerts.  
   Estimate: `4h`  
   Dependencies: `P5-T2`  
   Definition of Done: fallback status is visible in menu when alert delivery fails.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Heads-up lead-time scheduling, actionable notifications, and mini fallback UX integrated cleanly once notification lifecycle stayed in bundled-app context.`  
+slowed: `Early sprint runtime validation was gated by notification bundle-context setup and permission reset behavior.`  
+next fix: `Phase 6 should isolate smart-pause signal detectors behind testable services before wiring state-machine commands.`
 
 ## Phase 6 - smart pause basic (target: Week 6)
 Goal: stop interruptions during idle/fullscreen/media conditions.

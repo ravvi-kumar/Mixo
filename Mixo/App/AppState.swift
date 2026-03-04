@@ -13,6 +13,8 @@ final class AppState: ObservableObject {
     @Published var timerLongBreakEveryShortBreaks: Int
     @Published var timerBreakPolicyMode: BreakPolicyMode
     @Published var timerSkipDelaySeconds: Int
+    @Published var timerPreBreakNotificationLeadTimeSeconds: Int
+    @Published var notificationFallbackStatus: String?
     @Published var lastActionMessage = "App started"
 
     var menuBarLabel: String {
@@ -68,6 +70,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    var preBreakNotificationLeadTimeDisplay: String {
+        if timerStateMachine.configuration.preBreakNotificationLeadTimeSeconds == 0 {
+            return "Off"
+        }
+        return "\(timerStateMachine.configuration.preBreakNotificationLeadTimeSeconds)s"
+    }
+
+    var notificationFallbackStatusDisplay: String {
+        notificationFallbackStatus ?? "Healthy"
+    }
+
     var canStartTimer: Bool {
         timerMode == .idle
     }
@@ -100,24 +113,39 @@ final class AppState: ObservableObject {
         timerMode == .idle
     }
 
+    private var canDeliverNotificationHeadsUp: Bool {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .notDetermined, .denied:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
     private let notificationService: NotificationPermissionService
     private let timerPersistenceService: TimerPersistenceService
     private let overlayWindowManager: OverlayWindowManager
+    private let headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager
     private let breakChimeService: any BreakChimePlaying
     private let logger = AppLogger.make("state")
     private var timerStateMachine: BreakTimerStateMachine
     private var tickTask: Task<Void, Never>?
+    private var headsUpActionObserver: NSObjectProtocol?
 
     init(
         notificationService: NotificationPermissionService = .init(),
         timerPersistenceService: TimerPersistenceService = .init(),
         overlayWindowManager: OverlayWindowManager? = nil,
+        headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager? = nil,
         breakChimeService: (any BreakChimePlaying)? = nil,
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
         self.notificationService = notificationService
         self.timerPersistenceService = timerPersistenceService
         self.overlayWindowManager = overlayWindowManager ?? OverlayWindowManager()
+        self.headsUpFloatingCountdownManager = headsUpFloatingCountdownManager ?? HeadsUpFloatingCountdownManager()
         self.breakChimeService = breakChimeService ?? BreakChimeService()
 
         let restoredSnapshot = timerPersistenceService.load()
@@ -129,6 +157,7 @@ final class AppState: ObservableObject {
         timerLongBreakEveryShortBreaks = max(1, restoredConfiguration.longBreakEveryShortBreaks)
         timerBreakPolicyMode = restoredConfiguration.breakPolicyMode
         timerSkipDelaySeconds = max(0, restoredConfiguration.skipDelaySeconds)
+        timerPreBreakNotificationLeadTimeSeconds = max(0, restoredConfiguration.preBreakNotificationLeadTimeSeconds)
 
         if let restoredSnapshot {
             timerStateMachine = BreakTimerStateMachine(
@@ -144,12 +173,13 @@ final class AppState: ObservableObject {
         }
 
         syncTimerStateFromMachine()
+        updateHeadsUpMiniCountdown()
         updateTickLoop()
         updateOverlayForTimerState()
 
         if let restoredSnapshot {
             logger.info(
-                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public)"
+                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public) skip_delay=\(restoredSnapshot.configuration.skipDelaySeconds, privacy: .public) heads_up_lead=\(restoredSnapshot.configuration.preBreakNotificationLeadTimeSeconds, privacy: .public)"
             )
         }
 
@@ -157,8 +187,37 @@ final class AppState: ObservableObject {
             self?.handleOverlayEmergencyDismiss()
         }
 
+        headsUpActionObserver = NotificationCenter.default.addObserver(
+            forName: .mixoHeadsUpActionInvoked,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else {
+                return
+            }
+
+            guard
+                let commandRaw = notification.userInfo?[HeadsUpNotificationConstants.commandUserInfoKey] as? String,
+                let command = HeadsUpActionCommand(rawValue: commandRaw)
+            else {
+                return
+            }
+
+            let delaySeconds =
+                (notification.userInfo?[HeadsUpNotificationConstants.delaySecondsUserInfoKey] as? Int) ??
+                (notification.userInfo?[HeadsUpNotificationConstants.delaySecondsUserInfoKey] as? NSNumber)?.intValue ??
+                HeadsUpNotificationConstants.defaultDelaySeconds
+            self.handleHeadsUpAction(command, delaySeconds: delaySeconds)
+        }
+
         Task { [weak self] in
             await self?.refreshNotificationStatus()
+        }
+    }
+
+    deinit {
+        if let headsUpActionObserver {
+            NotificationCenter.default.removeObserver(headsUpActionObserver)
         }
     }
 
@@ -239,6 +298,35 @@ final class AppState: ObservableObject {
         }
     }
 
+    func handleHeadsUpAction(
+        _ command: HeadsUpActionCommand,
+        delaySeconds: Int = HeadsUpNotificationConstants.defaultDelaySeconds
+    ) {
+        switch command {
+        case .startNow:
+            logger.info("notification_action_start_now_received")
+            if applyTimerEvent(.forceBreak) {
+                lastActionMessage = "Break started from notification action"
+            } else {
+                lastActionMessage = "Notification start-now ignored in current state"
+            }
+        case .delay:
+            let boundedDelay = max(delaySeconds, 1)
+            logger.info("notification_action_delay_received delay_seconds=\(boundedDelay, privacy: .public)")
+            if delayUpcomingBreak(by: boundedDelay) {
+                let minutes = boundedDelay / 60
+                let remainder = boundedDelay % 60
+                if remainder == 0 {
+                    lastActionMessage = "Break delayed by \(minutes) min from notification"
+                } else {
+                    lastActionMessage = "Break delayed by \(boundedDelay) sec from notification"
+                }
+            } else {
+                lastActionMessage = "Notification delay ignored in current state"
+            }
+        }
+    }
+
     func showOverlayPreview() {
         logger.info("action_show_overlay_preview")
         overlayWindowManager.showPreviewOverlay()
@@ -270,11 +358,13 @@ final class AppState: ObservableObject {
         let longBreakMinutes = max(1, timerLongBreakDurationMinutes)
         let longBreakEvery = max(1, timerLongBreakEveryShortBreaks)
         let skipDelaySeconds = max(0, timerSkipDelaySeconds)
+        let notificationLeadTimeSeconds = max(0, timerPreBreakNotificationLeadTimeSeconds)
         timerWorkDurationMinutes = workMinutes
         timerBreakDurationSeconds = breakSeconds
         timerLongBreakDurationMinutes = longBreakMinutes
         timerLongBreakEveryShortBreaks = longBreakEvery
         timerSkipDelaySeconds = skipDelaySeconds
+        timerPreBreakNotificationLeadTimeSeconds = notificationLeadTimeSeconds
 
         let configuration = BreakTimerConfiguration(
             workDurationSeconds: workMinutes * 60,
@@ -282,16 +372,19 @@ final class AppState: ObservableObject {
             longBreakDurationSeconds: longBreakMinutes * 60,
             longBreakEveryShortBreaks: longBreakEvery,
             breakPolicyMode: timerBreakPolicyMode,
-            skipDelaySeconds: skipDelaySeconds
+            skipDelaySeconds: skipDelaySeconds,
+            preBreakNotificationLeadTimeSeconds: notificationLeadTimeSeconds
         )
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
+        updateHeadsUpMiniCountdown()
         updateTickLoop()
         updateOverlayForTimerState()
         persistTimerSnapshot()
+        syncHeadsUpNotificationSchedule()
 
         logger.info(
-            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public)"
+            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public) heads_up_lead=\(notificationLeadTimeSeconds, privacy: .public)"
         )
         lastActionMessage = "Timer settings updated"
     }
@@ -300,6 +393,7 @@ final class AppState: ObservableObject {
         let status = await notificationService.currentStatus()
         notificationStatus = status
         logger.info("notification_status=\(status.rawValue)")
+        syncHeadsUpNotificationSchedule()
     }
 
     private func handleTick() {
@@ -314,6 +408,7 @@ final class AppState: ObservableObject {
 
         if changed {
             syncTimerStateFromMachine()
+            updateHeadsUpMiniCountdown()
             let currentState = timerStateMachine.stateDescription
             logger.info(
                 "timer_transition event=\(event.rawValue, privacy: .public) from=\(previousState, privacy: .public) to=\(currentState, privacy: .public)"
@@ -321,6 +416,9 @@ final class AppState: ObservableObject {
             updateTickLoop()
             updateOverlayForTimerState()
             persistTimerSnapshot()
+            if event != .tick || previousMode != timerMode {
+                syncHeadsUpNotificationSchedule()
+            }
 
             if previousMode != .takingBreak, timerMode == .takingBreak {
                 breakChimeService.playBreakStartChime()
@@ -367,6 +465,114 @@ final class AppState: ObservableObject {
 
         tickTask?.cancel()
         tickTask = nil
+    }
+
+    private func updateHeadsUpMiniCountdown() {
+        guard timerMode == .running else {
+            headsUpFloatingCountdownManager.hide()
+            return
+        }
+
+        let leadTimeSeconds = max(timerStateMachine.configuration.preBreakNotificationLeadTimeSeconds, 0)
+        guard leadTimeSeconds > 0, timerRemainingSeconds <= leadTimeSeconds, timerRemainingSeconds > 0 else {
+            headsUpFloatingCountdownManager.hide()
+            return
+        }
+
+        let upcomingLongBreak = timerStateMachine.shortBreaksUntilLongBreak == 1
+        headsUpFloatingCountdownManager.show(
+            remainingSeconds: timerRemainingSeconds,
+            isLongBreak: upcomingLongBreak
+        )
+    }
+
+    private func syncHeadsUpNotificationSchedule() {
+        Task { [weak self] in
+            await self?.updateHeadsUpNotificationSchedule()
+        }
+    }
+
+    private func delayUpcomingBreak(by seconds: Int) -> Bool {
+        let previousState = timerStateMachine.stateDescription
+        let changed = timerStateMachine.delayUpcomingBreak(by: seconds)
+
+        guard changed else {
+            logger.info(
+                "timer_break_delay_ignored state=\(previousState, privacy: .public) delay_seconds=\(seconds, privacy: .public)"
+            )
+            return false
+        }
+
+        syncTimerStateFromMachine()
+        updateHeadsUpMiniCountdown()
+        updateTickLoop()
+        updateOverlayForTimerState()
+        persistTimerSnapshot()
+        syncHeadsUpNotificationSchedule()
+        logger.info(
+            "timer_break_delayed from=\(previousState, privacy: .public) to=\(self.timerStateMachine.stateDescription, privacy: .public) delay_seconds=\(seconds, privacy: .public)"
+        )
+        return true
+    }
+
+    private func updateHeadsUpNotificationSchedule() async {
+        guard timerMode == .running else {
+            notificationService.clearPreBreakReminder()
+            clearNotificationFallbackStatus()
+            return
+        }
+
+        let leadTimeSeconds = max(timerStateMachine.configuration.preBreakNotificationLeadTimeSeconds, 0)
+        guard leadTimeSeconds > 0 else {
+            notificationService.clearPreBreakReminder()
+            clearNotificationFallbackStatus()
+            return
+        }
+
+        guard canDeliverNotificationHeadsUp else {
+            notificationService.clearPreBreakReminder()
+            setNotificationFallbackStatus(
+                "Heads-up notification unavailable (\(notificationStatusDisplay)). Mini countdown remains active."
+            )
+            return
+        }
+
+        let upcomingLongBreak = timerStateMachine.shortBreaksUntilLongBreak == 1
+        let scheduleInSeconds = max(timerRemainingSeconds - leadTimeSeconds, 1)
+
+        do {
+            try await notificationService.schedulePreBreakReminder(
+                in: scheduleInSeconds,
+                leadTimeSeconds: leadTimeSeconds,
+                isLongBreak: upcomingLongBreak
+            )
+            logger.info(
+                "notification_heads_up_scheduled in_seconds=\(scheduleInSeconds, privacy: .public) lead_seconds=\(leadTimeSeconds, privacy: .public) next_is_long_break=\(upcomingLongBreak, privacy: .public)"
+            )
+            clearNotificationFallbackStatus()
+        } catch let NotificationPermissionService.ServiceError.unsupportedExecutionContext(reason) {
+            logger.error("notification_heads_up_unsupported_context reason=\(reason, privacy: .public)")
+            setNotificationFallbackStatus("Heads-up notification unavailable: \(reason)")
+        } catch {
+            logger.error("notification_heads_up_schedule_failed error=\(String(describing: error), privacy: .public)")
+            setNotificationFallbackStatus("Heads-up notification scheduling failed. Mini countdown remains active.")
+        }
+    }
+
+    private func setNotificationFallbackStatus(_ message: String) {
+        guard notificationFallbackStatus != message else {
+            return
+        }
+        notificationFallbackStatus = message
+        logger.error("notification_fallback_status message=\(message, privacy: .public)")
+    }
+
+    private func clearNotificationFallbackStatus() {
+        guard notificationFallbackStatus != nil else {
+            return
+        }
+        notificationFallbackStatus = nil
+        logger.info("notification_fallback_cleared")
     }
 
     private static func formatDuration(_ totalSeconds: Int) -> String {

@@ -55,7 +55,8 @@ final class TimerPersistenceServiceTests: XCTestCase {
             longBreakDurationSeconds: 300,
             longBreakEveryShortBreaks: 3,
             breakPolicyMode: .skipAfterDelay,
-            skipDelaySeconds: 25
+            skipDelaySeconds: 25,
+            preBreakNotificationLeadTimeSeconds: 45
         )
         let machine = BreakTimerStateMachine(
             configuration: configuration,
