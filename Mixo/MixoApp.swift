@@ -22,7 +22,7 @@ struct MixoApp: App {
         Settings {
             SettingsRootView()
                 .environmentObject(appState)
-                .frame(minWidth: 520, minHeight: 460)
+                .frame(minWidth: 980, minHeight: 640)
         }
     }
 }
