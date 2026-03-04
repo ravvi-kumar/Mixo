@@ -95,7 +95,7 @@ Out of scope this sprint:
 - [x] Timer state/config restores after app restart.
 
 ## Blockers
-- `2026-02-28` - `P1-T1/P1-T5` bundled app target still pending for notification permission validation. Owner: `Ravi + Codex`.
+- `2026-03-04` - `Resolved`: bundled app structure is now active in Xcode project and notification permission flow is validated.
 
 ## Daily Log
 Use this section every day; keep short.
@@ -132,5 +132,5 @@ Use this section every day; keep short.
 
 ## Sprint Retro (Fill at end)
 - worked: Explicit state model + test-first checks made timer behavior and persistence predictable.
-- slowed: Notification permission remains context-blocked until true app bundle target setup is complete.
+- slowed: Notification permission was initially context-blocked until true app bundle target setup was completed.
 - next fix: Begin overlay infrastructure with per-display window manager and keep tests around state transitions green.

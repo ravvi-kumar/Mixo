@@ -9,9 +9,9 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 5 - notifications + pre-break heads-up (target: Week 5) [P1 notification blocker still open]`
+- Current Phase: `Phase 5 - notifications + pre-break heads-up (target: Week 5)`
 - Blockers:
-  - `2026-02-28` - `P1-T1/P1-T5`: current Xcode run mode launches a bare executable, not a bundled `.app`; `UNUserNotificationCenter` cannot initialize.
+  - `None`
 - Decision Log:
   - `2026-02-28`: Sprint size set to 1-week micro-phases.
   - `2026-02-28`: Task format set to checklist + estimate + dependencies + DoD.
@@ -38,6 +38,8 @@
   - `2026-03-03`: Added break-start chime playback on transitions into break mode, keeping break-end chime behavior intact.
   - `2026-03-03`: Added temporary bundled-app runner (`scripts/run_bundled_app.sh`) and setup guide (`docs/NOTIFICATION_SETUP.md`) so notification permission can be tested from a valid `.app` context.
   - `2026-03-03`: Fixed bundled-app startup crash in notification status fetch by removing invalid actor-bound callback path in `NotificationPermissionService`.
+  - `2026-03-04`: Migrated repository to Xcode-native bundled app structure (`Mixo.xcodeproj` with `Mixo`, `MixoTests`, `MixoUITests`) while preserving existing git history.
+  - `2026-03-04`: Notification permission flow validated as working in bundled app context; closed `P1-T1` and `P1-T5`.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -62,7 +64,7 @@ Goal: runnable macOS menu bar app with empty settings shell.
 Exit Criteria: app launches, menu bar icon visible, settings window opens with placeholder tabs.
 
 Tasks:
-- [ ] `P1-T1` init xcode app target and bundle ids  
+- [x] `P1-T1` init xcode app target and bundle ids  
   Description: make base macOS target, set bundle ids for debug/release, set deployment target and signing settings.  
   Estimate: `4h`  
   Dependencies: `None`  
@@ -86,16 +88,16 @@ Tasks:
   Dependencies: `P1-T2`  
   Definition of Done: state transition events print with timestamp and subsystem tags.
 
-- [ ] `P1-T5` basic notification permission request flow  
+- [x] `P1-T5` basic notification permission request flow  
   Description: add permission request flow and capture accepted/denied state for later reminder features.  
   Estimate: `3h`  
   Dependencies: `P1-T2`  
   Definition of Done: permission prompt can be triggered and status is visible in debug logs.
 
 Retro note (fill after complete):  
-worked: `Menu bar + settings + lifecycle scaffolding came together quickly with low churn.`  
-slowed: `Notification permission depends on bundled app execution context; bare package launch path blocks prompt.`  
-next fix: `Create/validate true macOS app target and re-run permission flow in bundled context.`
+worked: `Menu bar + settings + lifecycle scaffolding came together quickly, and bundled app migration stabilized notification behavior.`  
+slowed: `Initial bare executable launch mode blocked UNUserNotificationCenter initialization until app-bundle migration was completed.`  
+next fix: `Keep Phase 5 implementation on the bundled app structure and expand heads-up/actionable notification features.`
 
 ## Phase 2 - timer core short break (target: Week 2)
 Goal: reliable 20-20-20 timer flow with pause/resume.
@@ -217,8 +219,8 @@ Tasks:
 
 Retro note (fill after complete):  
 worked: `Policy behavior stayed deterministic once skip rules lived in the state machine and UI bound to policy guards.`  
-slowed: `Notification flow remains blocked by bare executable launch context (UNUserNotificationCenter unsupported).`  
-next fix: `Complete bundled .app target/run path, then execute Phase 5 notification tasks.`
+slowed: `Notification work had to wait for bundled app migration to complete and stabilize.`  
+next fix: `Execute Phase 5 notification feature tasks now that bundled app permissions are working.`
 
 ## Phase 5 - notifications and heads-up (target: Week 5)
 Goal: add pre-break warning and postpone controls.

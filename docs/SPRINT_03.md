@@ -96,7 +96,7 @@ Out of scope this sprint:
 - [x] Emergency dismiss path exits overlay safely.
 
 ## Blockers
-- `2026-02-28` - `P1-T1/P1-T5` bundled app target still pending for notification permission validation. Owner: `Ravi + Codex`.
+- `2026-03-04` - `Resolved`: bundled app structure is now active in Xcode project and notification permission flow is validated.
 
 ## Daily Log
 Use this section every day; keep short.
@@ -133,5 +133,5 @@ Use this section every day; keep short.
 
 ## Sprint Retro (Fill at end)
 - worked: Explicit state transitions plus diagnostics made overlay behavior easy to validate and stabilize.
-- slowed: Phase 1 notification context blocker stayed open and required parallel tracking.
+- slowed: Phase 1 notification context blocker required parallel tracking until bundled app migration was completed.
 - next fix: Start policy-mode scheduler core in Phase 4 before adding more UI surface area.

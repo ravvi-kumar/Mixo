@@ -95,7 +95,7 @@ Out of scope this sprint:
 - [x] No deadlocks across policy mode transitions.
 
 ## Blockers
-- `2026-02-28` - `P1-T1/P1-T5` bundled app target still pending for notification permission validation. Owner: `Ravi + Codex`.
+- `2026-03-04` - `Resolved`: bundled app structure is now active in Xcode project and notification permission flow is validated.
 
 ## Daily Log
 Use this section every day; keep short.
@@ -103,13 +103,13 @@ Use this section every day; keep short.
 ### 2026-02-28
 - Focus: Transition from Sprint 03 overlay close-out to Phase 4 policy scheduler work.
 - Done: Sprint 03 closed; implemented `P4-T1` long-break cadence scheduler, long-break settings, persistence updates, and deterministic scheduler tests.
-- Issues: Phase 1 notification context blocker remains open.
+- Issues: Phase 1 notification context blocker remained open at that time.
 - Next: Implement `P4-T2` skip-anytime policy mode.
 
 ### 2026-03-03
 - Focus: Complete Phase 4 policy modes and transition coverage.
 - Done: Implemented policy model (`skip-anytime`, `skip-after-delay`, `lock`), wired menu/settings controls, persisted policy metadata, and added policy transition tests.
-- Issues: Phase 1 bundled-app notification blocker still open for notification-specific work.
+- Issues: Phase 1 bundled-app notification blocker was still open on this date.
 - Next: Start Phase 5 by unblocking bundled app target for notification flow validation.
 
 ### YYYY-MM-DD
@@ -132,5 +132,5 @@ Use this section every day; keep short.
 
 ## Sprint Retro (Fill at end)
 - worked: Centralizing policy rules in the state machine made menu/settings integration straightforward.
-- slowed: Notification-specific validation remains blocked by bare executable launch context.
-- next fix: Prioritize bundled app target work, then execute Phase 5 notification tasks.
+- slowed: Notification-specific validation was blocked by bare executable launch context until bundled app migration.
+- next fix: Execute Phase 5 notification tasks now that bundled app + permission flow are validated.

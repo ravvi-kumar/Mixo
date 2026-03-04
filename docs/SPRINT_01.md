@@ -28,7 +28,7 @@ Out of scope this sprint:
 - Hotkeys.
 
 ## Task Board (Phase 1 Mapping)
-- [ ] `P1-T1` init xcode app target and bundle ids
+- [x] `P1-T1` init xcode app target and bundle ids
   - Est: `4h`
   - Depends: `None`
   - Done means: buildable app target scaffold exists and identifiers configured.
@@ -48,7 +48,7 @@ Out of scope this sprint:
   - Depends: `P1-T2`
   - Done means: timer/state/lifecycle logs have timestamp + subsystem labels.
 
-- [ ] `P1-T5` notification permission request flow
+- [x] `P1-T5` notification permission request flow
   - Est: `3h`
   - Depends: `P1-T2`
   - Done means: permission request action works and status is persisted in runtime state.
@@ -83,19 +83,19 @@ Out of scope this sprint:
 - [x] Run clean build and launch check.
 - [x] Run Phase 1 exit criteria checklist.
 - [x] Update `docs/PROJECT_TASKS.md` checkboxes and retro note.
-- [ ] Write sprint retro bullets.
+- [x] Write sprint retro bullets.
 
 ## Verification Checklist (Run Before Marking Done)
 - [x] Build command succeeds from clean state.
 - [x] Menu bar icon appears within 3 seconds of launch.
 - [x] Settings window opens from menu command.
 - [x] All settings tabs render without crash.
-- [ ] Notification prompt can be triggered.
-- [ ] Permission state updates after user choice.
+- [x] Notification prompt can be triggered.
+- [x] Permission state updates after user choice.
 - [x] Lifecycle logs show startup/shutdown.
 
 ## Blockers
-- `2026-02-28` - `P1-T1/P1-T5` blocked in current run mode: app is launched as a bare executable (not bundled `.app`), so `UNUserNotificationCenter` cannot initialize. Owner: `Ravi + Codex`.
+- `2026-03-04` - `Resolved`: migrated to bundled Xcode app structure and validated notification permission flow in app context.
 
 ## Daily Log
 Use this section every day; keep short.
@@ -105,6 +105,12 @@ Use this section every day; keep short.
 - Done: Menu bar app shell, settings tabs, lifecycle logs, settings open flow, and permission state UI/logging are implemented; build is green.
 - Issues: Permission prompt remains blocked in non-bundled execution context from current Xcode run mode.
 - Next: Create/run via real macOS app target (`.app`) and close `P1-T1/P1-T5`.
+
+### 2026-03-04
+- Focus: close bundled app + notifications blocker and finalize Phase 1 closure.
+- Done: migrated to Xcode bundled app structure, validated notification permission prompt/status updates, and confirmed working run path from `Mixo.xcodeproj`.
+- Issues: none for Phase 1 notification context.
+- Next: continue Phase 5 feature implementation (heads-up timing + actions).
 
 ### YYYY-MM-DD
 - Focus:
@@ -131,6 +137,6 @@ Use this section every day; keep short.
 - Next:
 
 ## Sprint Retro (Fill at end)
-- worked:
-- slowed:
-- next fix:
+- worked: `Bundled Xcode app structure removed runtime context issues and made notification flow stable.`
+- slowed: `Initial SwiftPM bare-executable run path blocked UserNotifications API initialization.`
+- next fix: `Keep all notification feature work on bundled app path and expand Phase 5 reminder behaviors.`
