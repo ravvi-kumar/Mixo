@@ -15,7 +15,7 @@ struct MixoApp: App {
                     logger.info("menu_bar_rendered")
                 }
         } label: {
-            Label(appState.menuBarLabel, systemImage: "eye")
+            Label(appState.menuBarLabel, systemImage: "moon.zzz")
         }
         .menuBarExtraStyle(.window)
 

@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsRootView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedSection: SettingsSection = .breakSchedule
-    @State private var isSidebarVisible = true
 
     // Sprint 06 preview controls (UI-only for now).
     @State private var pauseOnMeetings = true
@@ -18,14 +17,11 @@ struct SettingsRootView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebarPane
-                .frame(width: isSidebarVisible ? 280 : 0, alignment: .leading)
-                .opacity(isSidebarVisible ? 1 : 0)
-                .clipped()
-                .allowsHitTesting(isSidebarVisible)
+                .frame(width: 280, alignment: .leading)
 
             Rectangle()
                 .fill(Color.white.opacity(0.08))
-                .frame(width: isSidebarVisible ? 1 : 0)
+                .frame(width: 1)
 
             detailPane
         }
@@ -36,54 +32,30 @@ struct SettingsRootView: View {
                 endPoint: .bottomTrailing
             )
         )
-        .animation(.easeInOut(duration: 0.2), value: isSidebarVisible)
-        .toolbar(.hidden, for: .windowToolbar)
     }
 
     private var sidebarPane: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button(action: toggleSidebar) {
-                    Image(systemName: "sidebar.leading")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.white.opacity(0.06))
-                        )
-                }
-                .buttonStyle(.plain)
-                .help("Hide Sidebar")
-
-                Spacer()
+        List(selection: $selectedSection) {
+            Section {
+                sidebarRow(for: .general)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
 
-            List(selection: $selectedSection) {
-                Section {
-                    sidebarRow(for: .general)
-                }
-
-                Section("Focus & Wellbeing") {
-                    sidebarRow(for: .breakSchedule)
-                    sidebarRow(for: .smartPause)
-                }
-
-                Section("Personalize") {
-                    sidebarRow(for: .soundEffects)
-                    sidebarRow(for: .keyboardShortcuts)
-                }
-
-                Section("Mixo") {
-                    sidebarRow(for: .about)
-                }
+            Section("Focus & Wellbeing") {
+                sidebarRow(for: .breakSchedule)
+                sidebarRow(for: .smartPause)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+
+            Section("Personalize") {
+                sidebarRow(for: .soundEffects)
+                sidebarRow(for: .keyboardShortcuts)
+            }
+
+            Section("Mixo") {
+                sidebarRow(for: .about)
+            }
         }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
         .background(
             LinearGradient(
                 colors: [Color.black.opacity(0.2), Color.black.opacity(0.08)],
@@ -96,37 +68,12 @@ struct SettingsRootView: View {
     private var detailPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                if !isSidebarVisible {
-                    HStack {
-                        Button(action: toggleSidebar) {
-                            Image(systemName: "sidebar.leading")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                        .fill(Color.white.opacity(0.06))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help("Show Sidebar")
-
-                        Spacer()
-                    }
-                }
-
                 sectionHeader
                 sectionDetail
             }
             .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func toggleSidebar() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isSidebarVisible.toggle()
-        }
     }
 
     private func sidebarRow(for section: SettingsSection) -> some View {
