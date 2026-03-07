@@ -192,15 +192,15 @@ final class OverlayWindowManager {
     }
 
     private func configurePreview() {
-        contentModel.title = "Overlay Preview"
-        contentModel.subtitle = "This is a fullscreen break overlay preview."
+        contentModel.title = "Relax those eyes"
+        contentModel.subtitle = "Set your eyes on something distant until the countdown is over"
         contentModel.countdown = "00:20"
         contentModel.showsCountdown = true
     }
 
     private func configureBreak(remainingSeconds: Int) {
-        contentModel.title = "Time for an eye break"
-        contentModel.subtitle = "Look at something far away for 20 seconds"
+        contentModel.title = "Relax those eyes"
+        contentModel.subtitle = "Set your eyes on something distant until the countdown is over"
         contentModel.countdown = Self.formatDuration(remainingSeconds)
         contentModel.showsCountdown = true
     }
@@ -233,44 +233,97 @@ private struct OverlayContentView: View {
     @ObservedObject var model: OverlayWindowManager.OverlayContentModel
 
     var body: some View {
-        ZStack {
-            OverlayBlurView()
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            let contentWidth = min(geometry.size.width * 0.76, 1260)
+            let titleSize = min(max(34, geometry.size.width * 0.05), 72)
+            let subtitleSize = min(max(18, geometry.size.width * 0.022), 40)
+            let countdownSize = min(max(46, geometry.size.width * 0.05), 90)
 
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.62),
-                    Color.black.opacity(0.52)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-                .ignoresSafeArea()
+            ZStack {
+                OverlayBlurView()
+                    .ignoresSafeArea()
 
-            VStack(spacing: 14) {
-                Image(systemName: "eye")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
+                Color.black.opacity(0.14)
+                    .ignoresSafeArea()
 
-                Text(model.title)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                VStack(spacing: 0) {
+                    Text("Current time is \(Self.currentTimeString())")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.86))
+                        .padding(.top, max(42, geometry.size.height * 0.085))
 
-                Text(model.subtitle)
-                    .font(.system(size: 17, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
+                    Spacer()
 
-                if model.showsCountdown {
-                    Text(model.countdown)
-                        .font(.system(size: 64, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .padding(.top, 12)
+                    VStack(spacing: 22) {
+                        Text(model.title)
+                            .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+
+                        Text(model.subtitle)
+                            .font(.system(size: subtitleSize, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+
+                        Capsule()
+                            .fill(Color.white.opacity(0.28))
+                            .frame(width: 190, height: 2)
+                            .padding(.top, 4)
+
+                        if model.showsCountdown {
+                            Text(model.countdown)
+                                .font(.system(size: countdownSize, weight: .heavy, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white.opacity(0.98))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .frame(width: contentWidth)
+
+                    Spacer()
+
+                    VStack(spacing: 14) {
+                        HStack(spacing: 12) {
+                            overlayActionPill(title: "Skip", systemName: "chevron.forward.2")
+                            overlayActionPill(title: "Lock Screen", systemName: "lock")
+                        }
+
+                        Text("Press Esc twice to skip")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.62))
+                    }
+                    .padding(.bottom, max(36, geometry.size.height * 0.09))
                 }
             }
-            .multilineTextAlignment(.center)
-            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func overlayActionPill(title: String, systemName: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+            Text(title)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(.white.opacity(0.9))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.2))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private static func currentTimeString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: Date())
     }
 }
 
