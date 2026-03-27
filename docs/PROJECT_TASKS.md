@@ -49,6 +49,10 @@
   - `2026-03-18`: Completed `P6-T3` fullscreen deferral hook with pending-break delay at work-boundary tick, deferred-break release on fullscreen exit, and new `AppStateFullscreenDeferralTests`; bundled `xcodebuild test -only-testing:MixoTests` passed.
   - `2026-03-27`: Completed `P6-T4` media playback deferral using CoreAudio output-device activity heuristic, added media/fullscreen priority handling at break boundary, and added `AppStateMediaDeferralTests`; bundled `xcodebuild test -only-testing:MixoTests` passed.
   - `2026-03-27`: Completed `P6-T5` smart-pause reason indicator in menu/settings (`SmartPauseReason` for idle/fullscreen/media) with clear-on-recovery behavior and updated smart-pause deferral tests; bundled `xcodebuild test -only-testing:MixoTests` passed.
+  - `2026-03-27`: Completed `P7-T1` shortcut manager baseline with global Carbon hotkey registration for start/pause-resume/skip, runtime status surface in menu/settings, and `AppStateShortcutTests`; bundled `xcodebuild test -only-testing:MixoTests/AppStateShortcutTests` passed.
+  - `2026-03-27`: Completed `P7-T2` shortcut recording + persistence with settings capture UI, `ShortcutPersistenceService`, runtime re-registration of bindings, and per-action/default reset controls.
+  - `2026-03-27`: Completed `P7-T3` internal shortcut conflict detection; duplicate bindings are rejected with warning and are not persisted, with additional shortcut conflict unit coverage.
+  - `2026-03-27`: Completed `P7-T4` menu quick-control state sync by reflecting active shortcut bindings in menu labels and adding `AppStateMenuControlStateTests` for idle/running/paused/lock-policy action-state coverage.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -319,25 +323,25 @@ Goal: full control from keyboard and menu quick actions.
 Exit Criteria: global shortcuts are configurable, conflict aware, and consistent with timer state.
 
 Tasks:
-- [ ] `P7-T1` shortcut manager for pause/resume/skip/start  
+- [x] `P7-T1` shortcut manager for pause/resume/skip/start  
   Description: create shortcut registry and route bindings to timer command handlers.  
   Estimate: `5h`  
   Dependencies: `P2-T4, P4-T2`  
   Definition of Done: registered shortcuts trigger expected actions from any app focus state.
 
-- [ ] `P7-T2` shortcut recording UI in settings  
+- [x] `P7-T2` shortcut recording UI in settings  
   Description: add key capture controls for user-defined shortcut mapping.  
   Estimate: `4h`  
   Dependencies: `P7-T1, P1-T3`  
   Definition of Done: user can record and save custom shortcut combinations in settings.
 
-- [ ] `P7-T3` conflict detection and user warning  
+- [x] `P7-T3` conflict detection and user warning  
   Description: detect duplicate internal bindings and warn on unsupported collisions.  
   Estimate: `4h`  
   Dependencies: `P7-T2`  
   Definition of Done: collisions show warning and invalid binding is not persisted.
 
-- [ ] `P7-T4` menu quick controls sync with timer state  
+- [x] `P7-T4` menu quick controls sync with timer state  
   Description: keep menu labels and enabled/disabled states in sync with current timer mode.  
   Estimate: `3h`  
   Dependencies: `P2-T4, P4-T4`  

@@ -19,6 +19,11 @@ enum SmartPauseReason: String {
     }
 }
 
+enum ShortcutBindingUpdateResult: Equatable {
+    case updated
+    case conflict(existingAction: ShortcutAction)
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -35,6 +40,7 @@ final class AppState: ObservableObject {
     @Published var timerLongIdleResetThresholdSeconds: Int
     @Published var notificationFallbackStatus: String?
     @Published private(set) var smartPauseReason: SmartPauseReason?
+    @Published private(set) var shortcutBindings: [ShortcutAction: ShortcutBinding]
     @Published var lastActionMessage = "App started"
 
     var menuBarLabel: String {
@@ -121,6 +127,10 @@ final class AppState: ObservableObject {
         smartPauseReason?.displayName ?? "None"
     }
 
+    var globalShortcutsStatusDisplay: String {
+        areGlobalShortcutsEnabled ? "Enabled" : "Disabled"
+    }
+
     var canStartTimer: Bool {
         timerMode == .idle
     }
@@ -166,11 +176,14 @@ final class AppState: ObservableObject {
 
     private let notificationService: NotificationPermissionService
     private let timerPersistenceService: TimerPersistenceService
+    private let shortcutPersistenceService: ShortcutPersistenceService
     private let overlayWindowManager: OverlayWindowManager
     private let headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager
     private let idleActivityService: any IdleActivityServicing
     private let fullscreenActivityService: any FullscreenActivityServicing
     private let mediaActivityService: any MediaActivityServicing
+    private let shortcutManager: any ShortcutManaging
+    private let areGlobalShortcutsEnabled: Bool
     private let breakChimeService: any BreakChimePlaying
     private let logger = AppLogger.make("state")
     private var timerStateMachine: BreakTimerStateMachine
@@ -187,21 +200,29 @@ final class AppState: ObservableObject {
     init(
         notificationService: NotificationPermissionService = .init(),
         timerPersistenceService: TimerPersistenceService = .init(),
+        shortcutPersistenceService: ShortcutPersistenceService = .init(),
         overlayWindowManager: OverlayWindowManager? = nil,
         headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager? = nil,
         idleActivityService: (any IdleActivityServicing)? = nil,
         fullscreenActivityService: (any FullscreenActivityServicing)? = nil,
         mediaActivityService: (any MediaActivityServicing)? = nil,
+        shortcutManager: (any ShortcutManaging)? = nil,
+        enableGlobalShortcuts: Bool? = nil,
         breakChimeService: (any BreakChimePlaying)? = nil,
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
         self.notificationService = notificationService
         self.timerPersistenceService = timerPersistenceService
+        self.shortcutPersistenceService = shortcutPersistenceService
         self.overlayWindowManager = overlayWindowManager ?? OverlayWindowManager()
         self.headsUpFloatingCountdownManager = headsUpFloatingCountdownManager ?? HeadsUpFloatingCountdownManager()
         self.idleActivityService = idleActivityService ?? IdleActivityService()
         self.fullscreenActivityService = fullscreenActivityService ?? FullscreenActivityService()
         self.mediaActivityService = mediaActivityService ?? MediaActivityService()
+        self.shortcutManager = shortcutManager ?? GlobalShortcutManager()
+        self.shortcutBindings = Self.mergedShortcutBindings(with: shortcutPersistenceService.load())
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        areGlobalShortcutsEnabled = enableGlobalShortcuts ?? !isRunningTests
         self.breakChimeService = breakChimeService ?? BreakChimeService()
 
         let restoredSnapshot = timerPersistenceService.load()
@@ -269,6 +290,8 @@ final class AppState: ObservableObject {
             self.handleHeadsUpAction(command, delaySeconds: delaySeconds)
         }
 
+        configureShortcutManager()
+
         Task { [weak self] in
             await self?.refreshNotificationStatus()
         }
@@ -277,6 +300,7 @@ final class AppState: ObservableObject {
     deinit {
         tickTask?.cancel()
         smartPauseMonitorTask?.cancel()
+        shortcutManager.stop()
         if let headsUpActionObserver {
             NotificationCenter.default.removeObserver(headsUpActionObserver)
         }
@@ -357,6 +381,68 @@ final class AppState: ObservableObject {
         } else {
             lastActionMessage = "Skip break unavailable in current state"
         }
+    }
+
+    func handleShortcutAction(_ action: ShortcutAction) {
+        logger.info("action_shortcut_invoked action=\(action.rawValue, privacy: .public)")
+
+        switch action {
+        case .start:
+            startTimer()
+        case .pauseResume:
+            if canPauseTimer {
+                pauseTimer()
+            } else if canResumeTimer {
+                resumeTimer()
+            } else {
+                lastActionMessage = "Pause/resume shortcut ignored for current timer state"
+                logger.info(
+                    "shortcut_ignored action=\(action.rawValue, privacy: .public) state=\(self.timerStateMachine.stateDescription, privacy: .public)"
+                )
+            }
+        case .skipBreak:
+            skipBreak()
+        }
+    }
+
+    func shortcutBindingDisplay(for action: ShortcutAction) -> String {
+        shortcutBindings[action]?.display ?? action.defaultBinding.display
+    }
+
+    @discardableResult
+    func updateShortcutBinding(_ binding: ShortcutBinding, for action: ShortcutAction) -> ShortcutBindingUpdateResult {
+        if let conflictingAction = conflictingAction(for: binding, excluding: action) {
+            lastActionMessage = "Shortcut conflict: \(conflictingAction.title)"
+            logger.error(
+                "shortcut_binding_conflict action=\(action.rawValue, privacy: .public) conflicts_with=\(conflictingAction.rawValue, privacy: .public) key_code=\(binding.keyCode, privacy: .public) modifiers=\(binding.carbonModifiers, privacy: .public)"
+            )
+            return .conflict(existingAction: conflictingAction)
+        }
+
+        shortcutBindings[action] = binding
+        shortcutPersistenceService.save(shortcutBindings)
+        configureShortcutManager()
+        lastActionMessage = "\(action.title) shortcut updated"
+        logger.info(
+            "shortcut_binding_updated action=\(action.rawValue, privacy: .public) key_code=\(binding.keyCode, privacy: .public) modifiers=\(binding.carbonModifiers, privacy: .public)"
+        )
+        return .updated
+    }
+
+    func resetShortcutBinding(for action: ShortcutAction) {
+        shortcutBindings[action] = action.defaultBinding
+        shortcutPersistenceService.save(shortcutBindings)
+        configureShortcutManager()
+        lastActionMessage = "\(action.title) shortcut reset"
+        logger.info("shortcut_binding_reset action=\(action.rawValue, privacy: .public)")
+    }
+
+    func resetAllShortcutBindings() {
+        shortcutBindings = Self.defaultShortcutBindings
+        shortcutPersistenceService.save(shortcutBindings)
+        configureShortcutManager()
+        lastActionMessage = "Shortcut defaults restored"
+        logger.info("shortcut_bindings_reset_all")
     }
 
     func handleHeadsUpAction(
@@ -845,6 +931,53 @@ final class AppState: ObservableObject {
         }
         notificationFallbackStatus = nil
         logger.info("notification_fallback_cleared")
+    }
+
+    private func configureShortcutManager() {
+        shortcutManager.stop()
+        guard areGlobalShortcutsEnabled else {
+            logger.info("shortcut_manager_disabled")
+            return
+        }
+
+        shortcutManager.start(bindings: shortcutBindings) { [weak self] action in
+            Task { @MainActor [weak self] in
+                self?.handleShortcutAction(action)
+            }
+        }
+        logger.info("shortcut_manager_enabled")
+    }
+
+    private static var defaultShortcutBindings: [ShortcutAction: ShortcutBinding] {
+        Dictionary(
+            uniqueKeysWithValues: ShortcutAction.allCases.map { action in
+                (action, action.defaultBinding)
+            }
+        )
+    }
+
+    private static func mergedShortcutBindings(
+        with persistedBindings: [ShortcutAction: ShortcutBinding]
+    ) -> [ShortcutAction: ShortcutBinding] {
+        var mergedBindings = defaultShortcutBindings
+        for (action, binding) in persistedBindings {
+            mergedBindings[action] = binding
+        }
+        return mergedBindings
+    }
+
+    private func conflictingAction(
+        for binding: ShortcutBinding,
+        excluding action: ShortcutAction
+    ) -> ShortcutAction? {
+        for (existingAction, existingBinding) in shortcutBindings where existingAction != action {
+            if existingBinding.keyCode == binding.keyCode,
+               existingBinding.carbonModifiers == binding.carbonModifiers
+            {
+                return existingAction
+            }
+        }
+        return nil
     }
 
     private static func formatDuration(_ totalSeconds: Int) -> String {

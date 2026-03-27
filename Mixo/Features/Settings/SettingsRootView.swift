@@ -1,3 +1,5 @@
+import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 struct SettingsRootView: View {
@@ -13,6 +15,9 @@ struct SettingsRootView: View {
     @State private var pauseOnScreenSharing = false
     @State private var smartPauseCooldownMinutes = 2
     @State private var smartPauseAwayMode: SmartPauseAwayMode = .automatic
+    @State private var recordingShortcutAction: ShortcutAction?
+    @State private var shortcutRecorderMonitor: Any?
+    @State private var shortcutRecorderMessage: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -32,6 +37,9 @@ struct SettingsRootView: View {
                 endPoint: .bottomTrailing
             )
         )
+        .onDisappear {
+            stopShortcutRecording(clearMessage: false)
+        }
     }
 
     private var sidebarPane: some View {
@@ -162,6 +170,7 @@ struct SettingsRootView: View {
                 keyValueRow("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
                 keyValueRow("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
                 keyValueRow("Smart Pause Reason", value: appState.smartPauseReasonDisplay)
+                keyValueRow("Global Shortcuts", value: appState.globalShortcutsStatusDisplay)
             }
         }
     }
@@ -400,9 +409,61 @@ struct SettingsRootView: View {
     private var keyboardShortcutsPanel: some View {
         SettingsCard(
             title: "Keyboard Shortcuts",
-            subtitle: "Global controls will be managed in Sprint 07."
+            subtitle: "Record custom global shortcuts for core timer controls."
         ) {
-            Text("Planned actions: Start, Pause/Resume, Take Break Now, Skip Break, Reset.")
+            keyValueRow("Status", value: appState.globalShortcutsStatusDisplay)
+
+            if let shortcutRecorderMessage {
+                Text(shortcutRecorderMessage)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            Divider()
+
+            ForEach(ShortcutAction.allCases, id: \.self) { action in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(action.title)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text(shortcutDisplay(for: action))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(recordingShortcutAction == action ? .orange : .secondary)
+
+                    Button(recordingShortcutAction == action ? "Cancel" : "Record") {
+                        toggleShortcutRecording(for: action)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    Button("Default") {
+                        stopShortcutRecording(clearMessage: true)
+                        appState.resetShortcutBinding(for: action)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(appState.shortcutBindingDisplay(for: action) == action.defaultBinding.display)
+                }
+                .font(.system(size: 13))
+            }
+
+            Divider()
+
+            HStack {
+                Spacer()
+
+                Button("Reset All to Defaults") {
+                    stopShortcutRecording(clearMessage: true)
+                    appState.resetAllShortcutBindings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Text("Record captures the next key combination with Command, Control, Option, or Shift.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -482,6 +543,160 @@ struct SettingsRootView: View {
             return "Lock"
         }
     }
+
+    private func shortcutDisplay(for action: ShortcutAction) -> String {
+        if recordingShortcutAction == action {
+            return "Press shortcut..."
+        }
+        return appState.shortcutBindingDisplay(for: action)
+    }
+
+    private func toggleShortcutRecording(for action: ShortcutAction) {
+        if recordingShortcutAction == action {
+            stopShortcutRecording(clearMessage: true)
+            return
+        }
+
+        stopShortcutRecording(clearMessage: false)
+        recordingShortcutAction = action
+        shortcutRecorderMessage = "Press new shortcut for \(action.title)."
+        shortcutRecorderMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handleShortcutCaptureEvent(event, for: action)
+        }
+    }
+
+    private func stopShortcutRecording(clearMessage: Bool) {
+        if let shortcutRecorderMonitor {
+            NSEvent.removeMonitor(shortcutRecorderMonitor)
+            self.shortcutRecorderMonitor = nil
+        }
+        recordingShortcutAction = nil
+        if clearMessage {
+            shortcutRecorderMessage = nil
+        }
+    }
+
+    private func handleShortcutCaptureEvent(_ event: NSEvent, for action: ShortcutAction) -> NSEvent? {
+        guard recordingShortcutAction == action else {
+            return event
+        }
+
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if event.keyCode == UInt16(kVK_Escape), modifiers.isDisjoint(with: [.command, .control, .option, .shift]) {
+            stopShortcutRecording(clearMessage: true)
+            return nil
+        }
+
+        guard let binding = makeShortcutBinding(from: event) else {
+            shortcutRecorderMessage = "Use a non-modifier key with Command, Control, or Option."
+            return nil
+        }
+
+        let updateResult = appState.updateShortcutBinding(binding, for: action)
+        switch updateResult {
+        case .updated:
+            stopShortcutRecording(clearMessage: true)
+        case let .conflict(existingAction):
+            shortcutRecorderMessage = "Conflict: already used by \(existingAction.title)."
+        }
+        return nil
+    }
+
+    private func makeShortcutBinding(from event: NSEvent) -> ShortcutBinding? {
+        guard !Self.modifierOnlyKeyCodes.contains(event.keyCode) else {
+            return nil
+        }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        var carbonModifiers: UInt32 = 0
+        var components: [String] = []
+
+        if flags.contains(.control) {
+            carbonModifiers |= UInt32(controlKey)
+            components.append("Control")
+        }
+        if flags.contains(.option) {
+            carbonModifiers |= UInt32(optionKey)
+            components.append("Option")
+        }
+        if flags.contains(.shift) {
+            carbonModifiers |= UInt32(shiftKey)
+            components.append("Shift")
+        }
+        if flags.contains(.command) {
+            carbonModifiers |= UInt32(cmdKey)
+            components.append("Command")
+        }
+
+        guard carbonModifiers != 0 else {
+            return nil
+        }
+
+        let keyTitle = keyTitle(for: event)
+        guard !keyTitle.isEmpty else {
+            return nil
+        }
+
+        return ShortcutBinding(
+            keyCode: UInt32(event.keyCode),
+            carbonModifiers: carbonModifiers,
+            display: (components + [keyTitle]).joined(separator: "+")
+        )
+    }
+
+    private func keyTitle(for event: NSEvent) -> String {
+        switch event.keyCode {
+        case UInt16(kVK_Return):
+            return "Return"
+        case UInt16(kVK_Tab):
+            return "Tab"
+        case UInt16(kVK_Space):
+            return "Space"
+        case UInt16(kVK_Delete):
+            return "Delete"
+        case UInt16(kVK_ForwardDelete):
+            return "ForwardDelete"
+        case UInt16(kVK_Escape):
+            return "Escape"
+        case UInt16(kVK_Home):
+            return "Home"
+        case UInt16(kVK_End):
+            return "End"
+        case UInt16(kVK_PageUp):
+            return "PageUp"
+        case UInt16(kVK_PageDown):
+            return "PageDown"
+        case UInt16(kVK_LeftArrow):
+            return "LeftArrow"
+        case UInt16(kVK_RightArrow):
+            return "RightArrow"
+        case UInt16(kVK_DownArrow):
+            return "DownArrow"
+        case UInt16(kVK_UpArrow):
+            return "UpArrow"
+        default:
+            guard
+                let characters = event.charactersIgnoringModifiers?.trimmingCharacters(in: .whitespacesAndNewlines),
+                !characters.isEmpty
+            else {
+                return "Key\(event.keyCode)"
+            }
+            return characters.uppercased()
+        }
+    }
+
+    private static let modifierOnlyKeyCodes: Set<UInt16> = [
+        UInt16(kVK_Command),
+        UInt16(kVK_RightCommand),
+        UInt16(kVK_Shift),
+        UInt16(kVK_RightShift),
+        UInt16(kVK_Option),
+        UInt16(kVK_RightOption),
+        UInt16(kVK_Control),
+        UInt16(kVK_RightControl),
+        UInt16(kVK_CapsLock),
+        UInt16(kVK_Function)
+    ]
 }
 
 private struct SettingsCard<Content: View>: View {

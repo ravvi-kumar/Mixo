@@ -23,6 +23,7 @@ struct MenuBarContentView: View {
             LabeledContent("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
             LabeledContent("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
             LabeledContent("Smart Pause", value: appState.smartPauseReasonDisplay)
+            LabeledContent("Global Shortcuts", value: appState.globalShortcutsStatusDisplay)
             LabeledContent("Heads-up Fallback", value: appState.notificationFallbackStatusDisplay)
 
             if let fallbackStatus = appState.notificationFallbackStatus {
@@ -53,17 +54,17 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Start Timer") {
+            Button("Start Timer \(shortcutSuffix(for: .start))") {
                 appState.startTimer()
             }
             .disabled(!appState.canStartTimer)
 
-            Button("Pause Timer") {
+            Button("Pause Timer \(shortcutSuffix(for: .pauseResume))") {
                 appState.pauseTimer()
             }
             .disabled(!appState.canPauseTimer)
 
-            Button("Resume Timer") {
+            Button("Resume Timer \(shortcutSuffix(for: .pauseResume))") {
                 appState.resumeTimer()
             }
             .disabled(!appState.canResumeTimer)
@@ -74,7 +75,7 @@ struct MenuBarContentView: View {
             .disabled(!appState.canTakeBreakNow)
 
             if appState.shouldShowSkipBreakAction {
-                Button("Skip Break") {
+                Button("Skip Break \(shortcutSuffix(for: .skipBreak))") {
                     appState.skipBreak()
                 }
                 .disabled(!appState.canSkipBreak)
@@ -105,5 +106,9 @@ struct MenuBarContentView: View {
             .keyboardShortcut("q")
         }
         .padding(12)
+    }
+
+    private func shortcutSuffix(for action: ShortcutAction) -> String {
+        "(\(appState.shortcutBindingDisplay(for: action)))"
     }
 }
