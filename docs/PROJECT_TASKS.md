@@ -44,6 +44,9 @@
   - `2026-03-04`: Implemented `P5-T2` actionable heads-up notifications (`Start now`, `Delay 5 min`) with delegate callback routing and app-state command handling; added unit tests for action behavior.
   - `2026-03-04`: Completed Sprint 05 (`P5-T3`, `P5-T4`, `P5-T5`) with floating mini countdown surface, menu quick-break action confirmation, and notification fallback status in menu/settings.
   - `2026-03-04`: Re-ran bundled Xcode test suite after Sprint 05 close; `MixoTests` passed (`** TEST SUCCEEDED **`, 23 tests).
+  - `2026-03-18`: Completed `P6-T1` idle smart-pause baseline with `IdleActivityService`, configurable idle threshold persistence, auto pause/resume wiring, and new `AppStateSmartPauseTests`; bundled `xcodebuild test` passed.
+  - `2026-03-18`: Completed `P6-T2` long-idle reset threshold with persisted config, reset-on-long-idle behavior, and pause-vs-reset transition tests; bundled `xcodebuild test -only-testing:MixoTests` passed.
+  - `2026-03-18`: Completed `P6-T3` fullscreen deferral hook with pending-break delay at work-boundary tick, deferred-break release on fullscreen exit, and new `AppStateFullscreenDeferralTests`; bundled `xcodebuild test -only-testing:MixoTests` passed.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -273,19 +276,19 @@ Goal: stop interruptions during idle/fullscreen/media conditions.
 Exit Criteria: timer auto-pauses for idle/fullscreen/media signal and resumes/reset follows rules.
 
 Tasks:
-- [ ] `P6-T1` idle detection threshold (pause timer)  
+- [x] `P6-T1` idle detection threshold (pause timer)  
   Description: detect short idle and pause countdown while user away from device.  
   Estimate: `5h`  
   Dependencies: `P2-T1`  
   Definition of Done: timer pauses after configured idle threshold and resumes on activity.
 
-- [ ] `P6-T2` long idle threshold (reset timer)  
+- [x] `P6-T2` long idle threshold (reset timer)  
   Description: detect long-away state and reset break cycle to avoid immediate break on return.  
   Estimate: `4h`  
   Dependencies: `P6-T1`  
   Definition of Done: cycle reset occurs after long idle and is visible in state logs.
 
-- [ ] `P6-T3` fullscreen app detection hook  
+- [x] `P6-T3` fullscreen app detection hook  
   Description: watch active app fullscreen state and defer break trigger while fullscreen active.  
   Estimate: `4h`  
   Dependencies: `P2-T1`  

@@ -159,6 +159,8 @@ struct SettingsRootView: View {
                 keyValueRow("Countdown", value: appState.timerRemainingDisplay)
                 keyValueRow("Break Policy", value: appState.breakPolicyModeDisplay)
                 keyValueRow("Heads-up Lead", value: appState.preBreakNotificationLeadTimeDisplay)
+                keyValueRow("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
+                keyValueRow("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
             }
         }
     }
@@ -268,6 +270,41 @@ struct SettingsRootView: View {
 
     private var smartPausePanel: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SettingsCard(
+                title: "Idle Auto-Pause (Live)",
+                subtitle: "Timer pauses when you are idle past the threshold and resumes when activity returns."
+            ) {
+                Stepper(
+                    "Pause Timer After Idle: \(appState.timerIdlePauseThresholdSeconds) sec",
+                    value: $appState.timerIdlePauseThresholdSeconds,
+                    in: 0 ... 1800,
+                    step: 5
+                )
+
+                Stepper(
+                    "Reset Timer After Long Idle: \(appState.timerLongIdleResetThresholdSeconds) sec",
+                    value: $appState.timerLongIdleResetThresholdSeconds,
+                    in: 0 ... 7200,
+                    step: 10
+                )
+
+                if appState.timerIdlePauseThresholdSeconds == 0 {
+                    Text("Idle auto-pause is disabled when threshold is 0 seconds.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Apply timer settings while timer is idle to save this threshold.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if appState.timerLongIdleResetThresholdSeconds == 0 {
+                    Text("Long-idle reset is disabled when threshold is 0 seconds.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             SettingsCard(
                 title: "Automatically Pause During",
                 subtitle: "These controls are the visual foundation for Sprint 06 smart pause behavior."

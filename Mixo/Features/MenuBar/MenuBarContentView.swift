@@ -20,6 +20,8 @@ struct MenuBarContentView: View {
             LabeledContent("Countdown", value: appState.timerRemainingDisplay)
             LabeledContent("Break Policy", value: appState.breakPolicyModeDisplay)
             LabeledContent("Heads-up Lead", value: appState.preBreakNotificationLeadTimeDisplay)
+            LabeledContent("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
+            LabeledContent("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
             LabeledContent("Heads-up Fallback", value: appState.notificationFallbackStatusDisplay)
 
             if let fallbackStatus = appState.notificationFallbackStatus {

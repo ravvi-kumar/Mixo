@@ -14,6 +14,8 @@ final class AppState: ObservableObject {
     @Published var timerBreakPolicyMode: BreakPolicyMode
     @Published var timerSkipDelaySeconds: Int
     @Published var timerPreBreakNotificationLeadTimeSeconds: Int
+    @Published var timerIdlePauseThresholdSeconds: Int
+    @Published var timerLongIdleResetThresholdSeconds: Int
     @Published var notificationFallbackStatus: String?
     @Published var lastActionMessage = "App started"
 
@@ -77,6 +79,22 @@ final class AppState: ObservableObject {
         return "\(timerStateMachine.configuration.preBreakNotificationLeadTimeSeconds)s"
     }
 
+    var idlePauseThresholdDisplay: String {
+        let threshold = timerStateMachine.configuration.idlePauseThresholdSeconds
+        if threshold == 0 {
+            return "Off"
+        }
+        return "\(threshold)s"
+    }
+
+    var longIdleResetThresholdDisplay: String {
+        let threshold = timerStateMachine.configuration.longIdleResetThresholdSeconds
+        if threshold == 0 {
+            return "Off"
+        }
+        return "\(threshold)s"
+    }
+
     var notificationFallbackStatusDisplay: String {
         notificationFallbackStatus ?? "Healthy"
     }
@@ -128,17 +146,27 @@ final class AppState: ObservableObject {
     private let timerPersistenceService: TimerPersistenceService
     private let overlayWindowManager: OverlayWindowManager
     private let headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager
+    private let idleActivityService: any IdleActivityServicing
+    private let fullscreenActivityService: any FullscreenActivityServicing
     private let breakChimeService: any BreakChimePlaying
     private let logger = AppLogger.make("state")
     private var timerStateMachine: BreakTimerStateMachine
     private var tickTask: Task<Void, Never>?
+    private var smartPauseMonitorTask: Task<Void, Never>?
     private var headsUpActionObserver: NSObjectProtocol?
+    private var isIdleAutoPaused = false
+    private var isBreakDeferredByFullscreen = false
+    private var idlePauseArmedAt: Date?
+
+    private static let idleResumeThresholdSeconds = 1
 
     init(
         notificationService: NotificationPermissionService = .init(),
         timerPersistenceService: TimerPersistenceService = .init(),
         overlayWindowManager: OverlayWindowManager? = nil,
         headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager? = nil,
+        idleActivityService: (any IdleActivityServicing)? = nil,
+        fullscreenActivityService: (any FullscreenActivityServicing)? = nil,
         breakChimeService: (any BreakChimePlaying)? = nil,
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
@@ -146,6 +174,8 @@ final class AppState: ObservableObject {
         self.timerPersistenceService = timerPersistenceService
         self.overlayWindowManager = overlayWindowManager ?? OverlayWindowManager()
         self.headsUpFloatingCountdownManager = headsUpFloatingCountdownManager ?? HeadsUpFloatingCountdownManager()
+        self.idleActivityService = idleActivityService ?? IdleActivityService()
+        self.fullscreenActivityService = fullscreenActivityService ?? FullscreenActivityService()
         self.breakChimeService = breakChimeService ?? BreakChimeService()
 
         let restoredSnapshot = timerPersistenceService.load()
@@ -158,6 +188,8 @@ final class AppState: ObservableObject {
         timerBreakPolicyMode = restoredConfiguration.breakPolicyMode
         timerSkipDelaySeconds = max(0, restoredConfiguration.skipDelaySeconds)
         timerPreBreakNotificationLeadTimeSeconds = max(0, restoredConfiguration.preBreakNotificationLeadTimeSeconds)
+        timerIdlePauseThresholdSeconds = max(0, restoredConfiguration.idlePauseThresholdSeconds)
+        timerLongIdleResetThresholdSeconds = max(0, restoredConfiguration.longIdleResetThresholdSeconds)
 
         if let restoredSnapshot {
             timerStateMachine = BreakTimerStateMachine(
@@ -175,11 +207,12 @@ final class AppState: ObservableObject {
         syncTimerStateFromMachine()
         updateHeadsUpMiniCountdown()
         updateTickLoop()
+        updateSmartPauseMonitorLoop()
         updateOverlayForTimerState()
 
         if let restoredSnapshot {
             logger.info(
-                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public) skip_delay=\(restoredSnapshot.configuration.skipDelaySeconds, privacy: .public) heads_up_lead=\(restoredSnapshot.configuration.preBreakNotificationLeadTimeSeconds, privacy: .public)"
+                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public) skip_delay=\(restoredSnapshot.configuration.skipDelaySeconds, privacy: .public) heads_up_lead=\(restoredSnapshot.configuration.preBreakNotificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(restoredSnapshot.configuration.idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(restoredSnapshot.configuration.longIdleResetThresholdSeconds, privacy: .public)"
             )
         }
 
@@ -216,6 +249,8 @@ final class AppState: ObservableObject {
     }
 
     deinit {
+        tickTask?.cancel()
+        smartPauseMonitorTask?.cancel()
         if let headsUpActionObserver {
             NotificationCenter.default.removeObserver(headsUpActionObserver)
         }
@@ -359,12 +394,16 @@ final class AppState: ObservableObject {
         let longBreakEvery = max(1, timerLongBreakEveryShortBreaks)
         let skipDelaySeconds = max(0, timerSkipDelaySeconds)
         let notificationLeadTimeSeconds = max(0, timerPreBreakNotificationLeadTimeSeconds)
+        let idlePauseThresholdSeconds = max(0, timerIdlePauseThresholdSeconds)
+        let longIdleResetThresholdSeconds = max(0, timerLongIdleResetThresholdSeconds)
         timerWorkDurationMinutes = workMinutes
         timerBreakDurationSeconds = breakSeconds
         timerLongBreakDurationMinutes = longBreakMinutes
         timerLongBreakEveryShortBreaks = longBreakEvery
         timerSkipDelaySeconds = skipDelaySeconds
         timerPreBreakNotificationLeadTimeSeconds = notificationLeadTimeSeconds
+        timerIdlePauseThresholdSeconds = idlePauseThresholdSeconds
+        timerLongIdleResetThresholdSeconds = longIdleResetThresholdSeconds
 
         let configuration = BreakTimerConfiguration(
             workDurationSeconds: workMinutes * 60,
@@ -373,18 +412,23 @@ final class AppState: ObservableObject {
             longBreakEveryShortBreaks: longBreakEvery,
             breakPolicyMode: timerBreakPolicyMode,
             skipDelaySeconds: skipDelaySeconds,
-            preBreakNotificationLeadTimeSeconds: notificationLeadTimeSeconds
+            preBreakNotificationLeadTimeSeconds: notificationLeadTimeSeconds,
+            idlePauseThresholdSeconds: idlePauseThresholdSeconds,
+            longIdleResetThresholdSeconds: longIdleResetThresholdSeconds
         )
+        isIdleAutoPaused = false
+        isBreakDeferredByFullscreen = false
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
         updateHeadsUpMiniCountdown()
         updateTickLoop()
+        updateSmartPauseMonitorLoop()
         updateOverlayForTimerState()
         persistTimerSnapshot()
         syncHeadsUpNotificationSchedule()
 
         logger.info(
-            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public) heads_up_lead=\(notificationLeadTimeSeconds, privacy: .public)"
+            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public) heads_up_lead=\(notificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(longIdleResetThresholdSeconds, privacy: .public)"
         )
         lastActionMessage = "Timer settings updated"
     }
@@ -396,8 +440,77 @@ final class AppState: ObservableObject {
         syncHeadsUpNotificationSchedule()
     }
 
-    private func handleTick() {
-        _ = applyTimerEvent(.tick)
+    @discardableResult
+    func processTimerTick() -> Bool {
+        if shouldDeferBreakForFullscreen() {
+            return false
+        }
+        return applyTimerEvent(.tick)
+    }
+
+    @discardableResult
+    func processIdleActivitySample(idleSeconds: Int, now: Date = Date()) -> Bool {
+        let idlePauseThreshold = max(timerStateMachine.configuration.idlePauseThresholdSeconds, 0)
+        let longIdleResetThreshold = max(timerStateMachine.configuration.longIdleResetThresholdSeconds, 0)
+        guard idlePauseThreshold > 0 || longIdleResetThreshold > 0 else {
+            return false
+        }
+
+        let boundedIdleSeconds = max(idleSeconds, 0)
+        let effectiveIdleSeconds = effectiveIdleSeconds(
+            fromReportedIdleSeconds: boundedIdleSeconds,
+            now: now
+        )
+
+        if longIdleResetThreshold > 0 {
+            if timerMode == .running, effectiveIdleSeconds >= longIdleResetThreshold {
+                guard applyTimerEvent(.reset) else {
+                    return false
+                }
+                logger.info(
+                    "smart_pause_long_idle_reset_triggered mode=running raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(longIdleResetThreshold, privacy: .public)"
+                )
+                lastActionMessage = "Timer reset after long idle"
+                return true
+            }
+
+            if timerMode == .paused, isIdleAutoPaused, boundedIdleSeconds >= longIdleResetThreshold {
+                guard applyTimerEvent(.reset) else {
+                    return false
+                }
+                logger.info(
+                    "smart_pause_long_idle_reset_triggered mode=paused raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(longIdleResetThreshold, privacy: .public)"
+                )
+                lastActionMessage = "Timer reset after long idle"
+                return true
+            }
+        }
+
+        if idlePauseThreshold > 0, timerMode == .running, effectiveIdleSeconds >= idlePauseThreshold {
+            guard applyTimerEvent(.pause) else {
+                return false
+            }
+            isIdleAutoPaused = true
+            updateSmartPauseMonitorLoop()
+            logger.info(
+                "smart_pause_idle_pause_triggered raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(idlePauseThreshold, privacy: .public)"
+            )
+            lastActionMessage = "Timer auto-paused while idle"
+            return true
+        }
+
+        if timerMode == .paused, isIdleAutoPaused, boundedIdleSeconds <= Self.idleResumeThresholdSeconds {
+            guard applyTimerEvent(.resume) else {
+                return false
+            }
+            isIdleAutoPaused = false
+            updateSmartPauseMonitorLoop()
+            logger.info("smart_pause_idle_pause_cleared idle_seconds=\(boundedIdleSeconds, privacy: .public)")
+            lastActionMessage = "Timer resumed after activity"
+            return true
+        }
+
+        return false
     }
 
     @discardableResult
@@ -413,7 +526,24 @@ final class AppState: ObservableObject {
             logger.info(
                 "timer_transition event=\(event.rawValue, privacy: .public) from=\(previousState, privacy: .public) to=\(currentState, privacy: .public)"
             )
+
+            if timerMode != .paused, isIdleAutoPaused {
+                isIdleAutoPaused = false
+            }
+            if timerMode != .running || timerRemainingSeconds > 1 {
+                isBreakDeferredByFullscreen = false
+            }
+
+            if timerMode == .running {
+                if previousMode != .running {
+                    idlePauseArmedAt = Date()
+                }
+            } else {
+                idlePauseArmedAt = nil
+            }
+
             updateTickLoop()
+            updateSmartPauseMonitorLoop()
             updateOverlayForTimerState()
             persistTimerSnapshot()
             if event != .tick || previousMode != timerMode {
@@ -457,7 +587,7 @@ final class AppState: ObservableObject {
                     guard !Task.isCancelled else {
                         return
                     }
-                    self?.handleTick()
+                    _ = self?.processTimerTick()
                 }
             }
             return
@@ -465,6 +595,80 @@ final class AppState: ObservableObject {
 
         tickTask?.cancel()
         tickTask = nil
+    }
+
+    private func updateSmartPauseMonitorLoop() {
+        let idlePauseThresholdSeconds = max(timerStateMachine.configuration.idlePauseThresholdSeconds, 0)
+        let longIdleResetThresholdSeconds = max(timerStateMachine.configuration.longIdleResetThresholdSeconds, 0)
+        let shouldMonitor =
+            (idlePauseThresholdSeconds > 0 || longIdleResetThresholdSeconds > 0) &&
+            (timerMode == .running || (timerMode == .paused && isIdleAutoPaused))
+
+        if shouldMonitor {
+            guard smartPauseMonitorTask == nil else {
+                return
+            }
+
+            smartPauseMonitorTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    await self?.pollIdleActivity()
+                }
+            }
+            return
+        }
+
+        smartPauseMonitorTask?.cancel()
+        smartPauseMonitorTask = nil
+    }
+
+    private func pollIdleActivity() {
+        let idleDuration = idleActivityService.idleDurationSeconds()
+        let idleSeconds = max(0, Int(idleDuration.rounded(.down)))
+        _ = processIdleActivitySample(idleSeconds: idleSeconds)
+    }
+
+    private func shouldDeferBreakForFullscreen() -> Bool {
+        guard timerMode == .running, timerRemainingSeconds <= 1 else {
+            isBreakDeferredByFullscreen = false
+            return false
+        }
+
+        if fullscreenActivityService.isFullscreenActive() {
+            guard !isBreakDeferredByFullscreen else {
+                return true
+            }
+            isBreakDeferredByFullscreen = true
+            logger.info(
+                "smart_pause_fullscreen_break_deferred remaining_seconds=\(self.timerRemainingSeconds, privacy: .public)"
+            )
+            lastActionMessage = "Break deferred while fullscreen is active"
+            return true
+        }
+
+        if isBreakDeferredByFullscreen {
+            isBreakDeferredByFullscreen = false
+            logger.info("smart_pause_fullscreen_break_deferral_cleared")
+            lastActionMessage = "Break resumed after fullscreen ended"
+        }
+        return false
+    }
+
+    private func effectiveIdleSeconds(fromReportedIdleSeconds reportedIdleSeconds: Int, now: Date) -> Int {
+        let baseline = idlePauseArmedAt ?? now
+        let elapsedSinceArmed = max(0, now.timeIntervalSince(baseline))
+        return max(
+            0,
+            Int(
+                min(
+                    TimeInterval(reportedIdleSeconds),
+                    elapsedSinceArmed
+                ).rounded(.down)
+            )
+        )
     }
 
     private func updateHeadsUpMiniCountdown() {
@@ -506,6 +710,7 @@ final class AppState: ObservableObject {
         syncTimerStateFromMachine()
         updateHeadsUpMiniCountdown()
         updateTickLoop()
+        updateSmartPauseMonitorLoop()
         updateOverlayForTimerState()
         persistTimerSnapshot()
         syncHeadsUpNotificationSchedule()

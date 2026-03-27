@@ -14,6 +14,8 @@ struct BreakTimerConfiguration: Equatable {
     var breakPolicyMode: BreakPolicyMode
     var skipDelaySeconds: Int
     var preBreakNotificationLeadTimeSeconds: Int
+    var idlePauseThresholdSeconds: Int
+    var longIdleResetThresholdSeconds: Int
 
     // Backward-compatible alias used by earlier code/tests.
     var breakDurationSeconds: Int {
@@ -28,7 +30,9 @@ struct BreakTimerConfiguration: Equatable {
         longBreakEveryShortBreaks: Int = 4,
         breakPolicyMode: BreakPolicyMode = .skipAnytime,
         skipDelaySeconds: Int = 10,
-        preBreakNotificationLeadTimeSeconds: Int = 30
+        preBreakNotificationLeadTimeSeconds: Int = 30,
+        idlePauseThresholdSeconds: Int = 120,
+        longIdleResetThresholdSeconds: Int = 15 * 60
     ) {
         self.workDurationSeconds = max(1, workDurationSeconds)
         shortBreakDurationSeconds = max(1, breakDurationSeconds)
@@ -37,6 +41,8 @@ struct BreakTimerConfiguration: Equatable {
         self.breakPolicyMode = breakPolicyMode
         self.skipDelaySeconds = max(0, skipDelaySeconds)
         self.preBreakNotificationLeadTimeSeconds = max(0, preBreakNotificationLeadTimeSeconds)
+        self.idlePauseThresholdSeconds = max(0, idlePauseThresholdSeconds)
+        self.longIdleResetThresholdSeconds = max(0, longIdleResetThresholdSeconds)
     }
 
     static let `default` = BreakTimerConfiguration(
