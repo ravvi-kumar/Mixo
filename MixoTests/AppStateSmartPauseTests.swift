@@ -26,6 +26,7 @@ final class AppStateSmartPauseTests: XCTestCase {
         let pauseSampleTime = Date().addingTimeInterval(5)
         XCTAssertTrue(appState.processIdleActivitySample(idleSeconds: 5, now: pauseSampleTime))
         XCTAssertEqual(appState.timerMode, .paused)
+        XCTAssertEqual(appState.smartPauseReasonDisplay, "Idle")
         XCTAssertEqual(appState.lastActionMessage, "Timer auto-paused while idle")
 
         appState.resetTimer()
@@ -55,6 +56,7 @@ final class AppStateSmartPauseTests: XCTestCase {
 
         XCTAssertTrue(appState.processIdleActivitySample(idleSeconds: 0, now: pauseSampleTime.addingTimeInterval(1)))
         XCTAssertEqual(appState.timerMode, .running)
+        XCTAssertEqual(appState.smartPauseReasonDisplay, "None")
         XCTAssertEqual(appState.lastActionMessage, "Timer resumed after activity")
 
         appState.resetTimer()
@@ -145,6 +147,7 @@ final class AppStateSmartPauseTests: XCTestCase {
 
         XCTAssertTrue(appState.processIdleActivitySample(idleSeconds: 20, now: Date().addingTimeInterval(20)))
         XCTAssertEqual(appState.timerMode, .idle)
+        XCTAssertEqual(appState.smartPauseReasonDisplay, "None")
         XCTAssertEqual(appState.lastActionMessage, "Timer reset after long idle")
     }
 
@@ -171,6 +174,7 @@ final class AppStateSmartPauseTests: XCTestCase {
 
         XCTAssertTrue(appState.processIdleActivitySample(idleSeconds: 10, now: Date().addingTimeInterval(10)))
         XCTAssertEqual(appState.timerMode, .idle)
+        XCTAssertEqual(appState.smartPauseReasonDisplay, "None")
         XCTAssertEqual(appState.lastActionMessage, "Timer reset after long idle")
     }
 

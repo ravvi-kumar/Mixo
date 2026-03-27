@@ -161,6 +161,7 @@ struct SettingsRootView: View {
                 keyValueRow("Heads-up Lead", value: appState.preBreakNotificationLeadTimeDisplay)
                 keyValueRow("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
                 keyValueRow("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
+                keyValueRow("Smart Pause Reason", value: appState.smartPauseReasonDisplay)
             }
         }
     }

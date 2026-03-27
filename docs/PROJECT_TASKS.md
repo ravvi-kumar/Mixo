@@ -9,7 +9,7 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 6 - smart pause basic (target: Week 6)`
+- Current Phase: `Phase 7 - keyboard shortcuts + controls (target: Week 7)`
 - Blockers:
   - `None`
 - Decision Log:
@@ -47,6 +47,8 @@
   - `2026-03-18`: Completed `P6-T1` idle smart-pause baseline with `IdleActivityService`, configurable idle threshold persistence, auto pause/resume wiring, and new `AppStateSmartPauseTests`; bundled `xcodebuild test` passed.
   - `2026-03-18`: Completed `P6-T2` long-idle reset threshold with persisted config, reset-on-long-idle behavior, and pause-vs-reset transition tests; bundled `xcodebuild test -only-testing:MixoTests` passed.
   - `2026-03-18`: Completed `P6-T3` fullscreen deferral hook with pending-break delay at work-boundary tick, deferred-break release on fullscreen exit, and new `AppStateFullscreenDeferralTests`; bundled `xcodebuild test -only-testing:MixoTests` passed.
+  - `2026-03-27`: Completed `P6-T4` media playback deferral using CoreAudio output-device activity heuristic, added media/fullscreen priority handling at break boundary, and added `AppStateMediaDeferralTests`; bundled `xcodebuild test -only-testing:MixoTests` passed.
+  - `2026-03-27`: Completed `P6-T5` smart-pause reason indicator in menu/settings (`SmartPauseReason` for idle/fullscreen/media) with clear-on-recovery behavior and updated smart-pause deferral tests; bundled `xcodebuild test -only-testing:MixoTests` passed.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -294,22 +296,22 @@ Tasks:
   Dependencies: `P2-T1`  
   Definition of Done: pending break waits until fullscreen exits before overlay starts.
 
-- [ ] `P6-T4` media activity signal integration (basic audio/video heuristic)  
+- [x] `P6-T4` media activity signal integration (basic audio/video heuristic)  
   Description: integrate basic media signal to defer break while likely video playback is active.  
   Estimate: `5h`  
   Dependencies: `P6-T3`  
   Definition of Done: playback-active condition pauses break trigger and resumes when media stops.
 
-- [ ] `P6-T5` smart pause reason indicator in menu/status  
+- [x] `P6-T5` smart pause reason indicator in menu/status  
   Description: show why timer paused (idle/fullscreen/media) so state is explainable to user.  
   Estimate: `3h`  
   Dependencies: `P6-T1, P6-T3, P6-T4`  
   Definition of Done: menu status shows active pause reason and clears when resume occurs.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Signal detectors (idle/fullscreen/media) were easier to tune once they were isolated into services and validated through AppState tests.`  
+slowed: `Media deferral initially made fullscreen tests environment-dependent until media service stubs were injected there too.`  
+next fix: `Phase 7 should centralize command routing early so shortcut bindings can remain deterministic and low-risk.`
 
 ## Phase 7 - keyboard shortcuts + controls (target: Week 7)
 Goal: full control from keyboard and menu quick actions.

@@ -2,6 +2,23 @@ import AppKit
 import Foundation
 import UserNotifications
 
+enum SmartPauseReason: String {
+    case idle
+    case fullscreen
+    case media
+
+    var displayName: String {
+        switch self {
+        case .idle:
+            return "Idle"
+        case .fullscreen:
+            return "Fullscreen"
+        case .media:
+            return "Media Playback"
+        }
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -17,6 +34,7 @@ final class AppState: ObservableObject {
     @Published var timerIdlePauseThresholdSeconds: Int
     @Published var timerLongIdleResetThresholdSeconds: Int
     @Published var notificationFallbackStatus: String?
+    @Published private(set) var smartPauseReason: SmartPauseReason?
     @Published var lastActionMessage = "App started"
 
     var menuBarLabel: String {
@@ -99,6 +117,10 @@ final class AppState: ObservableObject {
         notificationFallbackStatus ?? "Healthy"
     }
 
+    var smartPauseReasonDisplay: String {
+        smartPauseReason?.displayName ?? "None"
+    }
+
     var canStartTimer: Bool {
         timerMode == .idle
     }
@@ -148,6 +170,7 @@ final class AppState: ObservableObject {
     private let headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager
     private let idleActivityService: any IdleActivityServicing
     private let fullscreenActivityService: any FullscreenActivityServicing
+    private let mediaActivityService: any MediaActivityServicing
     private let breakChimeService: any BreakChimePlaying
     private let logger = AppLogger.make("state")
     private var timerStateMachine: BreakTimerStateMachine
@@ -156,6 +179,7 @@ final class AppState: ObservableObject {
     private var headsUpActionObserver: NSObjectProtocol?
     private var isIdleAutoPaused = false
     private var isBreakDeferredByFullscreen = false
+    private var isBreakDeferredByMedia = false
     private var idlePauseArmedAt: Date?
 
     private static let idleResumeThresholdSeconds = 1
@@ -167,6 +191,7 @@ final class AppState: ObservableObject {
         headsUpFloatingCountdownManager: HeadsUpFloatingCountdownManager? = nil,
         idleActivityService: (any IdleActivityServicing)? = nil,
         fullscreenActivityService: (any FullscreenActivityServicing)? = nil,
+        mediaActivityService: (any MediaActivityServicing)? = nil,
         breakChimeService: (any BreakChimePlaying)? = nil,
         timerConfiguration: BreakTimerConfiguration = .default
     ) {
@@ -176,6 +201,7 @@ final class AppState: ObservableObject {
         self.headsUpFloatingCountdownManager = headsUpFloatingCountdownManager ?? HeadsUpFloatingCountdownManager()
         self.idleActivityService = idleActivityService ?? IdleActivityService()
         self.fullscreenActivityService = fullscreenActivityService ?? FullscreenActivityService()
+        self.mediaActivityService = mediaActivityService ?? MediaActivityService()
         self.breakChimeService = breakChimeService ?? BreakChimeService()
 
         let restoredSnapshot = timerPersistenceService.load()
@@ -418,6 +444,8 @@ final class AppState: ObservableObject {
         )
         isIdleAutoPaused = false
         isBreakDeferredByFullscreen = false
+        isBreakDeferredByMedia = false
+        smartPauseReason = nil
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
         updateHeadsUpMiniCountdown()
@@ -442,7 +470,7 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func processTimerTick() -> Bool {
-        if shouldDeferBreakForFullscreen() {
+        if shouldDeferBreakForInterruption() {
             return false
         }
         return applyTimerEvent(.tick)
@@ -470,6 +498,7 @@ final class AppState: ObservableObject {
                 logger.info(
                     "smart_pause_long_idle_reset_triggered mode=running raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(longIdleResetThreshold, privacy: .public)"
                 )
+                smartPauseReason = nil
                 lastActionMessage = "Timer reset after long idle"
                 return true
             }
@@ -481,6 +510,7 @@ final class AppState: ObservableObject {
                 logger.info(
                     "smart_pause_long_idle_reset_triggered mode=paused raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(longIdleResetThreshold, privacy: .public)"
                 )
+                smartPauseReason = nil
                 lastActionMessage = "Timer reset after long idle"
                 return true
             }
@@ -495,6 +525,7 @@ final class AppState: ObservableObject {
             logger.info(
                 "smart_pause_idle_pause_triggered raw_idle_seconds=\(boundedIdleSeconds, privacy: .public) effective_idle_seconds=\(effectiveIdleSeconds, privacy: .public) threshold_seconds=\(idlePauseThreshold, privacy: .public)"
             )
+            smartPauseReason = .idle
             lastActionMessage = "Timer auto-paused while idle"
             return true
         }
@@ -506,6 +537,7 @@ final class AppState: ObservableObject {
             isIdleAutoPaused = false
             updateSmartPauseMonitorLoop()
             logger.info("smart_pause_idle_pause_cleared idle_seconds=\(boundedIdleSeconds, privacy: .public)")
+            smartPauseReason = nil
             lastActionMessage = "Timer resumed after activity"
             return true
         }
@@ -530,8 +562,15 @@ final class AppState: ObservableObject {
             if timerMode != .paused, isIdleAutoPaused {
                 isIdleAutoPaused = false
             }
+            if smartPauseReason == .idle, !(timerMode == .paused && isIdleAutoPaused) {
+                smartPauseReason = nil
+            }
             if timerMode != .running || timerRemainingSeconds > 1 {
                 isBreakDeferredByFullscreen = false
+                isBreakDeferredByMedia = false
+                if smartPauseReason == .fullscreen || smartPauseReason == .media {
+                    smartPauseReason = nil
+                }
             }
 
             if timerMode == .running {
@@ -631,17 +670,23 @@ final class AppState: ObservableObject {
         _ = processIdleActivitySample(idleSeconds: idleSeconds)
     }
 
-    private func shouldDeferBreakForFullscreen() -> Bool {
+    private func shouldDeferBreakForInterruption() -> Bool {
         guard timerMode == .running, timerRemainingSeconds <= 1 else {
             isBreakDeferredByFullscreen = false
+            isBreakDeferredByMedia = false
+            if smartPauseReason == .fullscreen || smartPauseReason == .media {
+                smartPauseReason = nil
+            }
             return false
         }
 
         if fullscreenActivityService.isFullscreenActive() {
+            isBreakDeferredByMedia = false
             guard !isBreakDeferredByFullscreen else {
                 return true
             }
             isBreakDeferredByFullscreen = true
+            smartPauseReason = .fullscreen
             logger.info(
                 "smart_pause_fullscreen_break_deferred remaining_seconds=\(self.timerRemainingSeconds, privacy: .public)"
             )
@@ -649,10 +694,32 @@ final class AppState: ObservableObject {
             return true
         }
 
+        if mediaActivityService.isMediaPlaybackLikelyActive() {
+            isBreakDeferredByFullscreen = false
+            guard !isBreakDeferredByMedia else {
+                return true
+            }
+            isBreakDeferredByMedia = true
+            smartPauseReason = .media
+            logger.info(
+                "smart_pause_media_break_deferred remaining_seconds=\(self.timerRemainingSeconds, privacy: .public)"
+            )
+            lastActionMessage = "Break deferred while media playback is active"
+            return true
+        }
+
         if isBreakDeferredByFullscreen {
             isBreakDeferredByFullscreen = false
             logger.info("smart_pause_fullscreen_break_deferral_cleared")
+            smartPauseReason = nil
             lastActionMessage = "Break resumed after fullscreen ended"
+        }
+
+        if isBreakDeferredByMedia {
+            isBreakDeferredByMedia = false
+            logger.info("smart_pause_media_break_deferral_cleared")
+            smartPauseReason = nil
+            lastActionMessage = "Break resumed after media playback ended"
         }
         return false
     }
