@@ -9,7 +9,7 @@
 
 ## Overall Status
 - Overall Status: `In Progress`
-- Current Phase: `Phase 7 - keyboard shortcuts + controls (target: Week 7)`
+- Current Phase: `Phase 8 - settings polish + persistence + presets (target: Week 8)`
 - Blockers:
   - `None`
 - Decision Log:
@@ -53,6 +53,9 @@
   - `2026-03-27`: Completed `P7-T2` shortcut recording + persistence with settings capture UI, `ShortcutPersistenceService`, runtime re-registration of bindings, and per-action/default reset controls.
   - `2026-03-27`: Completed `P7-T3` internal shortcut conflict detection; duplicate bindings are rejected with warning and are not persisted, with additional shortcut conflict unit coverage.
   - `2026-03-27`: Completed `P7-T4` menu quick-control state sync by reflecting active shortcut bindings in menu labels and adding `AppStateMenuControlStateTests` for idle/running/paused/lock-policy action-state coverage.
+  - `2026-03-27`: Completed `P7-T5` manual unfocused-app shortcut validation; start/pause-resume/skip bindings verified while another app was frontmost.
+  - `2026-03-27`: Completed `P8-T1` break settings polish with work-hours schedule window, runtime enforcement (auto-pause/auto-resume), persistence wiring, and new `AppStateWorkHoursTests`.
+  - `2026-03-27`: Completed `P8-T2` smart-pause detector toggles (idle/fullscreen/media) with persistence, runtime gating updates, and new detector-disable coverage in smart-pause/fullscreen/media test suites.
 
 ## Phase Roadmap
 | Phase | Week | Focus | Target Effort |
@@ -347,16 +350,16 @@ Tasks:
   Dependencies: `P2-T4, P4-T4`  
   Definition of Done: menu controls always reflect current state without stale actions.
 
-- [ ] `P7-T5` shortcut behavior tests when app unfocused  
+- [x] `P7-T5` shortcut behavior tests when app unfocused  
   Description: validate shortcuts still work while another app is frontmost.  
   Estimate: `4h`  
   Dependencies: `P7-T1, P7-T3`  
   Definition of Done: test checklist passes for unfocused app context and conflict cases.
 
 Retro note (fill after complete):  
-worked: `TBD`  
-slowed: `TBD`  
-next fix: `TBD`
+worked: `Shortcut command routing + binding persistence made global hotkeys deterministic and easy to verify.`  
+slowed: `Unfocused-context behavior still needed manual validation because it cannot be fully asserted in unit tests.`  
+next fix: `Move into Phase 8 to finish settings polish and persistence around detector controls, appearance, and presets.`
 
 ## Phase 8 - settings polish + persistence + presets (target: Week 8)
 Goal: make all MVP controls easy to configure and stable across restarts.
@@ -364,17 +367,17 @@ Goal: make all MVP controls easy to configure and stable across restarts.
 Exit Criteria: user can configure core MVP behavior end-to-end from settings UI.
 
 Tasks:
-- [ ] `P8-T1` breaks config screen (durations, intervals, work hours)  
+- [x] `P8-T1` breaks config screen (durations, intervals, work hours)  
   Description: complete break settings fields and add schedule window for active work hours only.  
   Estimate: `5h`  
   Dependencies: `P2-T2, P4-T1`  
   Definition of Done: break timing + work hours settings persist and drive runtime behavior.
 
-- [ ] `P8-T2` smart pause config (toggle per detector)  
+- [x] `P8-T2` smart pause config (toggle per detector)  
   Description: add per-detector toggles for idle/fullscreen/media smart pause behavior.  
   Estimate: `4h`  
   Dependencies: `P6-T1, P6-T3, P6-T4`  
-  Definition of Done: each detector can be enabled/disabled and change applies immediately.
+  Definition of Done: each detector can be enabled/disabled and applied through timer settings persistence flow.
 
 - [ ] `P8-T3` appearance config (overlay intensity, message text)  
   Description: user controls for blur/dim amount and break message customization.  

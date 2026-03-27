@@ -32,6 +32,32 @@ final class AppStateSmartPauseTests: XCTestCase {
         appState.resetTimer()
     }
 
+    func testIdleSampleIgnoredWhenIdleDetectorDisabled() {
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let persistence = TimerPersistenceService(defaults: defaults, key: "timer.snapshot.test")
+        let idleService = IdleActivityServiceStub()
+        let appState = AppState(
+            notificationService: .init(),
+            timerPersistenceService: persistence,
+            idleActivityService: idleService,
+            timerConfiguration: BreakTimerConfiguration(
+                workDurationSeconds: 120,
+                breakDurationSeconds: 20,
+                idlePauseThresholdSeconds: 5,
+                longIdleResetThresholdSeconds: 10,
+                smartPauseIdleEnabled: false
+            )
+        )
+
+        appState.startTimer()
+        XCTAssertEqual(appState.timerMode, .running)
+
+        XCTAssertFalse(appState.processIdleActivitySample(idleSeconds: 20, now: Date().addingTimeInterval(20)))
+        XCTAssertEqual(appState.timerMode, .running)
+    }
+
     func testIdleSampleResumesTimerAfterAutoPauseWhenActivityReturns() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }

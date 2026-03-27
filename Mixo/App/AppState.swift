@@ -38,6 +38,14 @@ final class AppState: ObservableObject {
     @Published var timerPreBreakNotificationLeadTimeSeconds: Int
     @Published var timerIdlePauseThresholdSeconds: Int
     @Published var timerLongIdleResetThresholdSeconds: Int
+    @Published var timerSmartPauseIdleEnabled: Bool
+    @Published var timerSmartPauseFullscreenEnabled: Bool
+    @Published var timerSmartPauseMediaEnabled: Bool
+    @Published var timerWorkHoursEnabled: Bool
+    @Published var timerWorkdayStartHour: Int
+    @Published var timerWorkdayStartMinute: Int
+    @Published var timerWorkdayEndHour: Int
+    @Published var timerWorkdayEndMinute: Int
     @Published var notificationFallbackStatus: String?
     @Published private(set) var smartPauseReason: SmartPauseReason?
     @Published private(set) var shortcutBindings: [ShortcutAction: ShortcutBinding]
@@ -104,6 +112,9 @@ final class AppState: ObservableObject {
     }
 
     var idlePauseThresholdDisplay: String {
+        guard timerStateMachine.configuration.smartPauseIdleEnabled else {
+            return "Detector Off"
+        }
         let threshold = timerStateMachine.configuration.idlePauseThresholdSeconds
         if threshold == 0 {
             return "Off"
@@ -112,11 +123,23 @@ final class AppState: ObservableObject {
     }
 
     var longIdleResetThresholdDisplay: String {
+        guard timerStateMachine.configuration.smartPauseIdleEnabled else {
+            return "Detector Off"
+        }
         let threshold = timerStateMachine.configuration.longIdleResetThresholdSeconds
         if threshold == 0 {
             return "Off"
         }
         return "\(threshold)s"
+    }
+
+    var workHoursDisplay: String {
+        guard timerStateMachine.configuration.workHoursEnabled else {
+            return "Off"
+        }
+        let start = formatClockTime(minutes: timerStateMachine.configuration.workdayStartMinutes)
+        let end = formatClockTime(minutes: timerStateMachine.configuration.workdayEndMinutes)
+        return "\(start)-\(end)"
     }
 
     var notificationFallbackStatusDisplay: String {
@@ -132,7 +155,7 @@ final class AppState: ObservableObject {
     }
 
     var canStartTimer: Bool {
-        timerMode == .idle
+        timerMode == .idle && isWithinConfiguredWorkHours()
     }
 
     var canPauseTimer: Bool {
@@ -193,6 +216,7 @@ final class AppState: ObservableObject {
     private var isIdleAutoPaused = false
     private var isBreakDeferredByFullscreen = false
     private var isBreakDeferredByMedia = false
+    private var isWorkHoursAutoPaused = false
     private var idlePauseArmedAt: Date?
 
     private static let idleResumeThresholdSeconds = 1
@@ -237,6 +261,14 @@ final class AppState: ObservableObject {
         timerPreBreakNotificationLeadTimeSeconds = max(0, restoredConfiguration.preBreakNotificationLeadTimeSeconds)
         timerIdlePauseThresholdSeconds = max(0, restoredConfiguration.idlePauseThresholdSeconds)
         timerLongIdleResetThresholdSeconds = max(0, restoredConfiguration.longIdleResetThresholdSeconds)
+        timerSmartPauseIdleEnabled = restoredConfiguration.smartPauseIdleEnabled
+        timerSmartPauseFullscreenEnabled = restoredConfiguration.smartPauseFullscreenEnabled
+        timerSmartPauseMediaEnabled = restoredConfiguration.smartPauseMediaEnabled
+        timerWorkHoursEnabled = restoredConfiguration.workHoursEnabled
+        timerWorkdayStartHour = max(0, min(restoredConfiguration.workdayStartMinutes / 60, 23))
+        timerWorkdayStartMinute = max(0, min(restoredConfiguration.workdayStartMinutes % 60, 59))
+        timerWorkdayEndHour = max(0, min(restoredConfiguration.workdayEndMinutes / 60, 23))
+        timerWorkdayEndMinute = max(0, min(restoredConfiguration.workdayEndMinutes % 60, 59))
 
         if let restoredSnapshot {
             timerStateMachine = BreakTimerStateMachine(
@@ -259,7 +291,7 @@ final class AppState: ObservableObject {
 
         if let restoredSnapshot {
             logger.info(
-                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public) skip_delay=\(restoredSnapshot.configuration.skipDelaySeconds, privacy: .public) heads_up_lead=\(restoredSnapshot.configuration.preBreakNotificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(restoredSnapshot.configuration.idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(restoredSnapshot.configuration.longIdleResetThresholdSeconds, privacy: .public)"
+                "timer_state_restored state=\(self.timerStateMachine.stateDescription, privacy: .public) work_seconds=\(restoredSnapshot.configuration.workDurationSeconds, privacy: .public) short_break_seconds=\(restoredSnapshot.configuration.shortBreakDurationSeconds, privacy: .public) long_break_seconds=\(restoredSnapshot.configuration.longBreakDurationSeconds, privacy: .public) cadence=\(restoredSnapshot.configuration.longBreakEveryShortBreaks, privacy: .public) policy=\(restoredSnapshot.configuration.breakPolicyMode.rawValue, privacy: .public) skip_delay=\(restoredSnapshot.configuration.skipDelaySeconds, privacy: .public) heads_up_lead=\(restoredSnapshot.configuration.preBreakNotificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(restoredSnapshot.configuration.idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(restoredSnapshot.configuration.longIdleResetThresholdSeconds, privacy: .public) smart_pause_idle_enabled=\(restoredSnapshot.configuration.smartPauseIdleEnabled, privacy: .public) smart_pause_fullscreen_enabled=\(restoredSnapshot.configuration.smartPauseFullscreenEnabled, privacy: .public) smart_pause_media_enabled=\(restoredSnapshot.configuration.smartPauseMediaEnabled, privacy: .public) work_hours_enabled=\(restoredSnapshot.configuration.workHoursEnabled, privacy: .public) work_hours_start_minutes=\(restoredSnapshot.configuration.workdayStartMinutes, privacy: .public) work_hours_end_minutes=\(restoredSnapshot.configuration.workdayEndMinutes, privacy: .public)"
             )
         }
 
@@ -329,8 +361,17 @@ final class AppState: ObservableObject {
         }
     }
 
-    func startTimer() {
+    func startTimer(now: Date = Date()) {
         logger.info("action_timer_start")
+        guard timerMode == .idle else {
+            lastActionMessage = "Start ignored for current timer state"
+            return
+        }
+        guard isWithinConfiguredWorkHours(now) else {
+            lastActionMessage = "Start unavailable outside configured work hours"
+            logger.info("timer_start_outside_work_hours_ignored")
+            return
+        }
         if applyTimerEvent(.start) {
             lastActionMessage = "Timer started"
         } else {
@@ -347,8 +388,17 @@ final class AppState: ObservableObject {
         }
     }
 
-    func resumeTimer() {
+    func resumeTimer(now: Date = Date()) {
         logger.info("action_timer_resume")
+        guard timerMode == .paused else {
+            lastActionMessage = "Resume ignored for current timer state"
+            return
+        }
+        guard isWithinConfiguredWorkHours(now) else {
+            lastActionMessage = "Resume unavailable outside configured work hours"
+            logger.info("timer_resume_outside_work_hours_ignored")
+            return
+        }
         if applyTimerEvent(.resume) {
             lastActionMessage = "Timer resumed"
         } else {
@@ -508,6 +558,15 @@ final class AppState: ObservableObject {
         let notificationLeadTimeSeconds = max(0, timerPreBreakNotificationLeadTimeSeconds)
         let idlePauseThresholdSeconds = max(0, timerIdlePauseThresholdSeconds)
         let longIdleResetThresholdSeconds = max(0, timerLongIdleResetThresholdSeconds)
+        let smartPauseIdleEnabled = timerSmartPauseIdleEnabled
+        let smartPauseFullscreenEnabled = timerSmartPauseFullscreenEnabled
+        let smartPauseMediaEnabled = timerSmartPauseMediaEnabled
+        let startHour = max(0, min(timerWorkdayStartHour, 23))
+        let startMinute = max(0, min(timerWorkdayStartMinute, 59))
+        let endHour = max(0, min(timerWorkdayEndHour, 23))
+        let endMinute = max(0, min(timerWorkdayEndMinute, 59))
+        let workdayStartMinutes = (startHour * 60) + startMinute
+        let workdayEndMinutes = (endHour * 60) + endMinute
         timerWorkDurationMinutes = workMinutes
         timerBreakDurationSeconds = breakSeconds
         timerLongBreakDurationMinutes = longBreakMinutes
@@ -516,6 +575,10 @@ final class AppState: ObservableObject {
         timerPreBreakNotificationLeadTimeSeconds = notificationLeadTimeSeconds
         timerIdlePauseThresholdSeconds = idlePauseThresholdSeconds
         timerLongIdleResetThresholdSeconds = longIdleResetThresholdSeconds
+        timerWorkdayStartHour = startHour
+        timerWorkdayStartMinute = startMinute
+        timerWorkdayEndHour = endHour
+        timerWorkdayEndMinute = endMinute
 
         let configuration = BreakTimerConfiguration(
             workDurationSeconds: workMinutes * 60,
@@ -526,11 +589,18 @@ final class AppState: ObservableObject {
             skipDelaySeconds: skipDelaySeconds,
             preBreakNotificationLeadTimeSeconds: notificationLeadTimeSeconds,
             idlePauseThresholdSeconds: idlePauseThresholdSeconds,
-            longIdleResetThresholdSeconds: longIdleResetThresholdSeconds
+            longIdleResetThresholdSeconds: longIdleResetThresholdSeconds,
+            smartPauseIdleEnabled: smartPauseIdleEnabled,
+            smartPauseFullscreenEnabled: smartPauseFullscreenEnabled,
+            smartPauseMediaEnabled: smartPauseMediaEnabled,
+            workHoursEnabled: timerWorkHoursEnabled,
+            workdayStartMinutes: workdayStartMinutes,
+            workdayEndMinutes: workdayEndMinutes
         )
         isIdleAutoPaused = false
         isBreakDeferredByFullscreen = false
         isBreakDeferredByMedia = false
+        isWorkHoursAutoPaused = false
         smartPauseReason = nil
         timerStateMachine = BreakTimerStateMachine(configuration: configuration)
         syncTimerStateFromMachine()
@@ -542,7 +612,7 @@ final class AppState: ObservableObject {
         syncHeadsUpNotificationSchedule()
 
         logger.info(
-            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public) heads_up_lead=\(notificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(longIdleResetThresholdSeconds, privacy: .public)"
+            "timer_configuration_updated work_seconds=\((workMinutes * 60), privacy: .public) short_break_seconds=\(breakSeconds, privacy: .public) long_break_seconds=\((longBreakMinutes * 60), privacy: .public) cadence=\(longBreakEvery, privacy: .public) policy=\(self.timerBreakPolicyMode.rawValue, privacy: .public) skip_delay=\(skipDelaySeconds, privacy: .public) heads_up_lead=\(notificationLeadTimeSeconds, privacy: .public) idle_pause_threshold=\(idlePauseThresholdSeconds, privacy: .public) long_idle_reset_threshold=\(longIdleResetThresholdSeconds, privacy: .public) smart_pause_idle_enabled=\(smartPauseIdleEnabled, privacy: .public) smart_pause_fullscreen_enabled=\(smartPauseFullscreenEnabled, privacy: .public) smart_pause_media_enabled=\(smartPauseMediaEnabled, privacy: .public) work_hours_enabled=\(self.timerWorkHoursEnabled, privacy: .public) work_hours_start_minutes=\(workdayStartMinutes, privacy: .public) work_hours_end_minutes=\(workdayEndMinutes, privacy: .public)"
         )
         lastActionMessage = "Timer settings updated"
     }
@@ -556,6 +626,14 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func processTimerTick() -> Bool {
+        if processWorkHoursScheduleSample() {
+            return true
+        }
+
+        guard timerMode == .running || timerMode == .takingBreak else {
+            return false
+        }
+
         if shouldDeferBreakForInterruption() {
             return false
         }
@@ -564,6 +642,10 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func processIdleActivitySample(idleSeconds: Int, now: Date = Date()) -> Bool {
+        guard timerStateMachine.configuration.smartPauseIdleEnabled else {
+            return false
+        }
+
         let idlePauseThreshold = max(timerStateMachine.configuration.idlePauseThresholdSeconds, 0)
         let longIdleResetThreshold = max(timerStateMachine.configuration.longIdleResetThresholdSeconds, 0)
         guard idlePauseThreshold > 0 || longIdleResetThreshold > 0 else {
@@ -616,7 +698,11 @@ final class AppState: ObservableObject {
             return true
         }
 
-        if timerMode == .paused, isIdleAutoPaused, boundedIdleSeconds <= Self.idleResumeThresholdSeconds {
+        if timerMode == .paused,
+           isIdleAutoPaused,
+           boundedIdleSeconds <= Self.idleResumeThresholdSeconds,
+           isWithinConfiguredWorkHours(now)
+        {
             guard applyTimerEvent(.resume) else {
                 return false
             }
@@ -625,6 +711,36 @@ final class AppState: ObservableObject {
             logger.info("smart_pause_idle_pause_cleared idle_seconds=\(boundedIdleSeconds, privacy: .public)")
             smartPauseReason = nil
             lastActionMessage = "Timer resumed after activity"
+            return true
+        }
+
+        return false
+    }
+
+    @discardableResult
+    func processWorkHoursScheduleSample(now: Date = Date()) -> Bool {
+        guard timerStateMachine.configuration.workHoursEnabled else {
+            return false
+        }
+
+        let isWithinWorkHours = isWithinConfiguredWorkHours(now)
+        if timerMode == .running, !isWithinWorkHours {
+            guard applyTimerEvent(.pause) else {
+                return false
+            }
+            isWorkHoursAutoPaused = true
+            logger.info("work_hours_pause_triggered")
+            lastActionMessage = "Timer paused outside configured work hours"
+            return true
+        }
+
+        if timerMode == .paused, isWorkHoursAutoPaused, isWithinWorkHours {
+            guard applyTimerEvent(.resume) else {
+                return false
+            }
+            isWorkHoursAutoPaused = false
+            logger.info("work_hours_pause_cleared")
+            lastActionMessage = "Timer resumed within configured work hours"
             return true
         }
 
@@ -647,6 +763,9 @@ final class AppState: ObservableObject {
 
             if timerMode != .paused, isIdleAutoPaused {
                 isIdleAutoPaused = false
+            }
+            if timerMode != .paused, isWorkHoursAutoPaused {
+                isWorkHoursAutoPaused = false
             }
             if smartPauseReason == .idle, !(timerMode == .paused && isIdleAutoPaused) {
                 smartPauseReason = nil
@@ -699,7 +818,7 @@ final class AppState: ObservableObject {
     }
 
     private func updateTickLoop() {
-        let shouldTick = timerMode == .running || timerMode == .takingBreak
+        let shouldTick = timerMode == .running || timerMode == .takingBreak || (timerMode == .paused && isWorkHoursAutoPaused)
 
         if shouldTick {
             guard tickTask == nil else {
@@ -726,6 +845,7 @@ final class AppState: ObservableObject {
         let idlePauseThresholdSeconds = max(timerStateMachine.configuration.idlePauseThresholdSeconds, 0)
         let longIdleResetThresholdSeconds = max(timerStateMachine.configuration.longIdleResetThresholdSeconds, 0)
         let shouldMonitor =
+            timerStateMachine.configuration.smartPauseIdleEnabled &&
             (idlePauseThresholdSeconds > 0 || longIdleResetThresholdSeconds > 0) &&
             (timerMode == .running || (timerMode == .paused && isIdleAutoPaused))
 
@@ -766,7 +886,30 @@ final class AppState: ObservableObject {
             return false
         }
 
-        if fullscreenActivityService.isFullscreenActive() {
+        let fullscreenEnabled = timerStateMachine.configuration.smartPauseFullscreenEnabled
+        let mediaEnabled = timerStateMachine.configuration.smartPauseMediaEnabled
+
+        if !fullscreenEnabled && isBreakDeferredByFullscreen {
+            isBreakDeferredByFullscreen = false
+            logger.info("smart_pause_fullscreen_break_deferral_disabled")
+            if smartPauseReason == .fullscreen {
+                smartPauseReason = nil
+            }
+        }
+
+        if !mediaEnabled && isBreakDeferredByMedia {
+            isBreakDeferredByMedia = false
+            logger.info("smart_pause_media_break_deferral_disabled")
+            if smartPauseReason == .media {
+                smartPauseReason = nil
+            }
+        }
+
+        guard fullscreenEnabled || mediaEnabled else {
+            return false
+        }
+
+        if fullscreenEnabled, fullscreenActivityService.isFullscreenActive() {
             isBreakDeferredByMedia = false
             guard !isBreakDeferredByFullscreen else {
                 return true
@@ -780,7 +923,7 @@ final class AppState: ObservableObject {
             return true
         }
 
-        if mediaActivityService.isMediaPlaybackLikelyActive() {
+        if mediaEnabled, mediaActivityService.isMediaPlaybackLikelyActive() {
             isBreakDeferredByFullscreen = false
             guard !isBreakDeferredByMedia else {
                 return true
@@ -978,6 +1121,17 @@ final class AppState: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func isWithinConfiguredWorkHours(_ now: Date = Date()) -> Bool {
+        timerStateMachine.configuration.isWithinWorkHours(at: now)
+    }
+
+    private func formatClockTime(minutes: Int) -> String {
+        let normalized = ((minutes % (24 * 60)) + (24 * 60)) % (24 * 60)
+        let hour = normalized / 60
+        let minute = normalized % 60
+        return String(format: "%02d:%02d", hour, minute)
     }
 
     private static func formatDuration(_ totalSeconds: Int) -> String {

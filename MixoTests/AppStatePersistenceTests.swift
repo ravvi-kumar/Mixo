@@ -19,7 +19,13 @@ final class AppStatePersistenceTests: XCTestCase {
             skipDelaySeconds: 35,
             preBreakNotificationLeadTimeSeconds: 50,
             idlePauseThresholdSeconds: 210,
-            longIdleResetThresholdSeconds: 420
+            longIdleResetThresholdSeconds: 420,
+            smartPauseIdleEnabled: true,
+            smartPauseFullscreenEnabled: false,
+            smartPauseMediaEnabled: false,
+            workHoursEnabled: true,
+            workdayStartMinutes: 8 * 60,
+            workdayEndMinutes: 16 * 60
         )
         let machine = BreakTimerStateMachine(
             configuration: savedConfiguration,
@@ -46,6 +52,14 @@ final class AppStatePersistenceTests: XCTestCase {
         XCTAssertEqual(appState.timerPreBreakNotificationLeadTimeSeconds, 50)
         XCTAssertEqual(appState.timerIdlePauseThresholdSeconds, 210)
         XCTAssertEqual(appState.timerLongIdleResetThresholdSeconds, 420)
+        XCTAssertTrue(appState.timerSmartPauseIdleEnabled)
+        XCTAssertFalse(appState.timerSmartPauseFullscreenEnabled)
+        XCTAssertFalse(appState.timerSmartPauseMediaEnabled)
+        XCTAssertTrue(appState.timerWorkHoursEnabled)
+        XCTAssertEqual(appState.timerWorkdayStartHour, 8)
+        XCTAssertEqual(appState.timerWorkdayStartMinute, 0)
+        XCTAssertEqual(appState.timerWorkdayEndHour, 16)
+        XCTAssertEqual(appState.timerWorkdayEndMinute, 0)
     }
 
     @MainActor

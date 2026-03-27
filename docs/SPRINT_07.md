@@ -48,7 +48,7 @@ Out of scope this sprint:
   - Depends: `P2-T4, P4-T4`
   - Done means: menu controls always reflect current state without stale actions.
 
-- [ ] `P7-T5` shortcut behavior tests when app unfocused
+- [x] `P7-T5` shortcut behavior tests when app unfocused
   - Est: `4h`
   - Depends: `P7-T1, P7-T3`
   - Done means: test checklist passes for unfocused app context and conflict cases.
@@ -58,7 +58,7 @@ Out of scope this sprint:
 - [x] Custom shortcuts persist across app restart.
 - [x] Duplicate internal shortcuts are rejected and warning shown.
 - [x] Menu button enabled/disabled states stay correct through full timer cycle.
-- [ ] Start/pause-resume/skip shortcuts work while another app is frontmost.
+- [x] Start/pause-resume/skip shortcuts work while another app is frontmost.
 
 ## Blockers
 - `None`
@@ -70,7 +70,13 @@ Out of scope this sprint:
 - Issues: none.
 - Next: finish `P7-T5` unfocused behavior verification checklist.
 
+### 2026-03-27 (Close)
+- Focus: Complete Sprint 07 validation and hand off into Sprint 08 settings polish.
+- Done: User validated global shortcuts while another app was frontmost; `P7-T5` and sprint exit checklist are complete.
+- Issues: none.
+- Next: execute `P8-T1` and `P8-T2` configuration work.
+
 ## Sprint Retro (Fill at end)
-- worked: `TBD`
-- slowed: `TBD`
-- next fix: `TBD`
+- worked: `Shortcut routing stayed reliable once command ownership was centralized in AppState.`
+- slowed: `Unfocused shortcut behavior needed manual verification instead of pure unit-test coverage.`
+- next fix: `Carry deterministic command wiring into Sprint 08 settings/persistence work.`

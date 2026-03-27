@@ -58,7 +58,13 @@ final class TimerPersistenceServiceTests: XCTestCase {
             skipDelaySeconds: 25,
             preBreakNotificationLeadTimeSeconds: 45,
             idlePauseThresholdSeconds: 180,
-            longIdleResetThresholdSeconds: 900
+            longIdleResetThresholdSeconds: 900,
+            smartPauseIdleEnabled: false,
+            smartPauseFullscreenEnabled: true,
+            smartPauseMediaEnabled: false,
+            workHoursEnabled: true,
+            workdayStartMinutes: 8 * 60,
+            workdayEndMinutes: 17 * 60
         )
         let machine = BreakTimerStateMachine(
             configuration: configuration,

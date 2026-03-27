@@ -118,6 +118,40 @@ final class AppStateMediaDeferralTests: XCTestCase {
         XCTAssertEqual(appState.timerRemainingSeconds, 20)
     }
 
+    func testMediaDetectorDisabledDoesNotDeferBreak() {
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let persistence = TimerPersistenceService(defaults: defaults, key: "timer.snapshot.test")
+        let fullscreenService = FullscreenActivityServiceStub()
+        let mediaService = MediaActivityServiceStub()
+        mediaService.isActive = true
+        let appState = AppState(
+            notificationService: .init(),
+            timerPersistenceService: persistence,
+            idleActivityService: IdleActivityServiceStub(),
+            fullscreenActivityService: fullscreenService,
+            mediaActivityService: mediaService,
+            timerConfiguration: BreakTimerConfiguration(
+                workDurationSeconds: 2,
+                breakDurationSeconds: 20,
+                idlePauseThresholdSeconds: 0,
+                longIdleResetThresholdSeconds: 0,
+                smartPauseFullscreenEnabled: false,
+                smartPauseMediaEnabled: false
+            )
+        )
+
+        appState.startTimer()
+        XCTAssertTrue(appState.processTimerTick())
+        XCTAssertEqual(appState.timerMode, .running)
+        XCTAssertEqual(appState.timerRemainingSeconds, 1)
+
+        XCTAssertTrue(appState.processTimerTick())
+        XCTAssertEqual(appState.timerMode, .takingBreak)
+        XCTAssertEqual(appState.timerRemainingSeconds, 20)
+    }
+
     private func makeDefaults() -> (UserDefaults, String) {
         let suiteName = "mixo.appstate.media.tests.\(UUID().uuidString)"
         return (UserDefaults(suiteName: suiteName)!, suiteName)

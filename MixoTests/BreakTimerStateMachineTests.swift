@@ -215,6 +215,38 @@ final class BreakTimerStateMachineTests: XCTestCase {
         XCTAssertEqual(machine.state, .running(remaining: 100))
     }
 
+    func testWorkHoursWindowSameDayRange() {
+        let calendar = makeCalendar()
+        let configuration = BreakTimerConfiguration(
+            workDurationSeconds: 1200,
+            breakDurationSeconds: 20,
+            workHoursEnabled: true,
+            workdayStartMinutes: 9 * 60,
+            workdayEndMinutes: 17 * 60
+        )
+
+        XCTAssertFalse(configuration.isWithinWorkHours(at: makeDate(hour: 8, minute: 59, calendar: calendar), calendar: calendar))
+        XCTAssertTrue(configuration.isWithinWorkHours(at: makeDate(hour: 9, minute: 0, calendar: calendar), calendar: calendar))
+        XCTAssertTrue(configuration.isWithinWorkHours(at: makeDate(hour: 16, minute: 59, calendar: calendar), calendar: calendar))
+        XCTAssertFalse(configuration.isWithinWorkHours(at: makeDate(hour: 17, minute: 0, calendar: calendar), calendar: calendar))
+    }
+
+    func testWorkHoursWindowOvernightRange() {
+        let calendar = makeCalendar()
+        let configuration = BreakTimerConfiguration(
+            workDurationSeconds: 1200,
+            breakDurationSeconds: 20,
+            workHoursEnabled: true,
+            workdayStartMinutes: 22 * 60,
+            workdayEndMinutes: 6 * 60
+        )
+
+        XCTAssertFalse(configuration.isWithinWorkHours(at: makeDate(hour: 21, minute: 30, calendar: calendar), calendar: calendar))
+        XCTAssertTrue(configuration.isWithinWorkHours(at: makeDate(hour: 22, minute: 0, calendar: calendar), calendar: calendar))
+        XCTAssertTrue(configuration.isWithinWorkHours(at: makeDate(hour: 2, minute: 0, calendar: calendar), calendar: calendar))
+        XCTAssertFalse(configuration.isWithinWorkHours(at: makeDate(hour: 6, minute: 0, calendar: calendar), calendar: calendar))
+    }
+
     private func makeMachine(
         work: Int,
         rest: Int,
@@ -233,5 +265,15 @@ final class BreakTimerStateMachineTests: XCTestCase {
                 skipDelaySeconds: skipDelay
             )
         )
+    }
+
+    private func makeDate(hour: Int, minute: Int, calendar: Calendar) -> Date {
+        return calendar.date(from: DateComponents(year: 2026, month: 3, day: 27, hour: hour, minute: minute))!
+    }
+
+    private func makeCalendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
     }
 }

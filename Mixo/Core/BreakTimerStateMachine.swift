@@ -16,6 +16,12 @@ struct BreakTimerConfiguration: Equatable {
     var preBreakNotificationLeadTimeSeconds: Int
     var idlePauseThresholdSeconds: Int
     var longIdleResetThresholdSeconds: Int
+    var smartPauseIdleEnabled: Bool
+    var smartPauseFullscreenEnabled: Bool
+    var smartPauseMediaEnabled: Bool
+    var workHoursEnabled: Bool
+    var workdayStartMinutes: Int
+    var workdayEndMinutes: Int
 
     // Backward-compatible alias used by earlier code/tests.
     var breakDurationSeconds: Int {
@@ -32,7 +38,13 @@ struct BreakTimerConfiguration: Equatable {
         skipDelaySeconds: Int = 10,
         preBreakNotificationLeadTimeSeconds: Int = 30,
         idlePauseThresholdSeconds: Int = 120,
-        longIdleResetThresholdSeconds: Int = 15 * 60
+        longIdleResetThresholdSeconds: Int = 15 * 60,
+        smartPauseIdleEnabled: Bool = true,
+        smartPauseFullscreenEnabled: Bool = true,
+        smartPauseMediaEnabled: Bool = true,
+        workHoursEnabled: Bool = false,
+        workdayStartMinutes: Int = 9 * 60,
+        workdayEndMinutes: Int = 18 * 60
     ) {
         self.workDurationSeconds = max(1, workDurationSeconds)
         shortBreakDurationSeconds = max(1, breakDurationSeconds)
@@ -43,6 +55,40 @@ struct BreakTimerConfiguration: Equatable {
         self.preBreakNotificationLeadTimeSeconds = max(0, preBreakNotificationLeadTimeSeconds)
         self.idlePauseThresholdSeconds = max(0, idlePauseThresholdSeconds)
         self.longIdleResetThresholdSeconds = max(0, longIdleResetThresholdSeconds)
+        self.smartPauseIdleEnabled = smartPauseIdleEnabled
+        self.smartPauseFullscreenEnabled = smartPauseFullscreenEnabled
+        self.smartPauseMediaEnabled = smartPauseMediaEnabled
+        self.workHoursEnabled = workHoursEnabled
+        self.workdayStartMinutes = BreakTimerConfiguration.normalizedMinutes(workdayStartMinutes)
+        self.workdayEndMinutes = BreakTimerConfiguration.normalizedMinutes(workdayEndMinutes)
+    }
+
+    func isWithinWorkHours(at date: Date, calendar: Calendar = .current) -> Bool {
+        guard workHoursEnabled else {
+            return true
+        }
+
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let currentMinutes = (hour * 60) + minute
+
+        let start = workdayStartMinutes
+        let end = workdayEndMinutes
+
+        if start == end {
+            return true
+        }
+        if start < end {
+            return currentMinutes >= start && currentMinutes < end
+        }
+        return currentMinutes >= start || currentMinutes < end
+    }
+
+    private static func normalizedMinutes(_ value: Int) -> Int {
+        let day = 24 * 60
+        let modulo = value % day
+        return modulo >= 0 ? modulo : modulo + day
     }
 
     static let `default` = BreakTimerConfiguration(

@@ -79,6 +79,40 @@ final class AppStateFullscreenDeferralTests: XCTestCase {
         XCTAssertEqual(appState.lastActionMessage, "Break started")
     }
 
+    func testFullscreenDetectorDisabledDoesNotDeferBreak() {
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let persistence = TimerPersistenceService(defaults: defaults, key: "timer.snapshot.test")
+        let fullscreenService = FullscreenActivityServiceStub()
+        fullscreenService.isActive = true
+        let mediaService = MediaActivityServiceStub()
+        let appState = AppState(
+            notificationService: .init(),
+            timerPersistenceService: persistence,
+            idleActivityService: IdleActivityServiceStub(),
+            fullscreenActivityService: fullscreenService,
+            mediaActivityService: mediaService,
+            timerConfiguration: BreakTimerConfiguration(
+                workDurationSeconds: 2,
+                breakDurationSeconds: 20,
+                idlePauseThresholdSeconds: 0,
+                longIdleResetThresholdSeconds: 0,
+                smartPauseFullscreenEnabled: false,
+                smartPauseMediaEnabled: false
+            )
+        )
+
+        appState.startTimer()
+        XCTAssertTrue(appState.processTimerTick())
+        XCTAssertEqual(appState.timerMode, .running)
+        XCTAssertEqual(appState.timerRemainingSeconds, 1)
+
+        XCTAssertTrue(appState.processTimerTick())
+        XCTAssertEqual(appState.timerMode, .takingBreak)
+        XCTAssertEqual(appState.timerRemainingSeconds, 20)
+    }
+
     private func makeDefaults() -> (UserDefaults, String) {
         let suiteName = "mixo.appstate.fullscreen.tests.\(UUID().uuidString)"
         return (UserDefaults(suiteName: suiteName)!, suiteName)

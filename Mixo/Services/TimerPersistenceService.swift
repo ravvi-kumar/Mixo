@@ -21,6 +21,12 @@ struct TimerPersistenceService {
             case preBreakNotificationLeadTimeSeconds
             case idlePauseThresholdSeconds
             case longIdleResetThresholdSeconds
+            case smartPauseIdleEnabled
+            case smartPauseFullscreenEnabled
+            case smartPauseMediaEnabled
+            case workHoursEnabled
+            case workdayStartMinutes
+            case workdayEndMinutes
             case mode
             case remainingSeconds
             case shortBreaksSinceLongBreak
@@ -37,6 +43,12 @@ struct TimerPersistenceService {
         var preBreakNotificationLeadTimeSeconds: Int
         var idlePauseThresholdSeconds: Int
         var longIdleResetThresholdSeconds: Int
+        var smartPauseIdleEnabled: Bool
+        var smartPauseFullscreenEnabled: Bool
+        var smartPauseMediaEnabled: Bool
+        var workHoursEnabled: Bool
+        var workdayStartMinutes: Int
+        var workdayEndMinutes: Int
         var mode: String
         var remainingSeconds: Int
         var shortBreaksSinceLongBreak: Int
@@ -53,6 +65,12 @@ struct TimerPersistenceService {
             preBreakNotificationLeadTimeSeconds: Int,
             idlePauseThresholdSeconds: Int,
             longIdleResetThresholdSeconds: Int,
+            smartPauseIdleEnabled: Bool,
+            smartPauseFullscreenEnabled: Bool,
+            smartPauseMediaEnabled: Bool,
+            workHoursEnabled: Bool,
+            workdayStartMinutes: Int,
+            workdayEndMinutes: Int,
             mode: String,
             remainingSeconds: Int,
             shortBreaksSinceLongBreak: Int,
@@ -68,6 +86,12 @@ struct TimerPersistenceService {
             self.preBreakNotificationLeadTimeSeconds = preBreakNotificationLeadTimeSeconds
             self.idlePauseThresholdSeconds = idlePauseThresholdSeconds
             self.longIdleResetThresholdSeconds = longIdleResetThresholdSeconds
+            self.smartPauseIdleEnabled = smartPauseIdleEnabled
+            self.smartPauseFullscreenEnabled = smartPauseFullscreenEnabled
+            self.smartPauseMediaEnabled = smartPauseMediaEnabled
+            self.workHoursEnabled = workHoursEnabled
+            self.workdayStartMinutes = workdayStartMinutes
+            self.workdayEndMinutes = workdayEndMinutes
             self.mode = mode
             self.remainingSeconds = remainingSeconds
             self.shortBreaksSinceLongBreak = shortBreaksSinceLongBreak
@@ -87,6 +111,12 @@ struct TimerPersistenceService {
             preBreakNotificationLeadTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .preBreakNotificationLeadTimeSeconds) ?? 30
             idlePauseThresholdSeconds = try container.decodeIfPresent(Int.self, forKey: .idlePauseThresholdSeconds) ?? 120
             longIdleResetThresholdSeconds = try container.decodeIfPresent(Int.self, forKey: .longIdleResetThresholdSeconds) ?? 15 * 60
+            smartPauseIdleEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartPauseIdleEnabled) ?? true
+            smartPauseFullscreenEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartPauseFullscreenEnabled) ?? true
+            smartPauseMediaEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartPauseMediaEnabled) ?? true
+            workHoursEnabled = try container.decodeIfPresent(Bool.self, forKey: .workHoursEnabled) ?? false
+            workdayStartMinutes = try container.decodeIfPresent(Int.self, forKey: .workdayStartMinutes) ?? 9 * 60
+            workdayEndMinutes = try container.decodeIfPresent(Int.self, forKey: .workdayEndMinutes) ?? 18 * 60
             mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? "idle"
             remainingSeconds = try container.decodeIfPresent(Int.self, forKey: .remainingSeconds) ?? 0
             shortBreaksSinceLongBreak = try container.decodeIfPresent(Int.self, forKey: .shortBreaksSinceLongBreak) ?? 0
@@ -105,6 +135,12 @@ struct TimerPersistenceService {
             try container.encode(preBreakNotificationLeadTimeSeconds, forKey: .preBreakNotificationLeadTimeSeconds)
             try container.encode(idlePauseThresholdSeconds, forKey: .idlePauseThresholdSeconds)
             try container.encode(longIdleResetThresholdSeconds, forKey: .longIdleResetThresholdSeconds)
+            try container.encode(smartPauseIdleEnabled, forKey: .smartPauseIdleEnabled)
+            try container.encode(smartPauseFullscreenEnabled, forKey: .smartPauseFullscreenEnabled)
+            try container.encode(smartPauseMediaEnabled, forKey: .smartPauseMediaEnabled)
+            try container.encode(workHoursEnabled, forKey: .workHoursEnabled)
+            try container.encode(workdayStartMinutes, forKey: .workdayStartMinutes)
+            try container.encode(workdayEndMinutes, forKey: .workdayEndMinutes)
             try container.encode(mode, forKey: .mode)
             try container.encode(remainingSeconds, forKey: .remainingSeconds)
             try container.encode(shortBreaksSinceLongBreak, forKey: .shortBreaksSinceLongBreak)
@@ -136,6 +172,12 @@ struct TimerPersistenceService {
             preBreakNotificationLeadTimeSeconds: max(configuration.preBreakNotificationLeadTimeSeconds, 0),
             idlePauseThresholdSeconds: max(configuration.idlePauseThresholdSeconds, 0),
             longIdleResetThresholdSeconds: max(configuration.longIdleResetThresholdSeconds, 0),
+            smartPauseIdleEnabled: configuration.smartPauseIdleEnabled,
+            smartPauseFullscreenEnabled: configuration.smartPauseFullscreenEnabled,
+            smartPauseMediaEnabled: configuration.smartPauseMediaEnabled,
+            workHoursEnabled: configuration.workHoursEnabled,
+            workdayStartMinutes: configuration.workdayStartMinutes,
+            workdayEndMinutes: configuration.workdayEndMinutes,
             mode: modeString(from: machine.state),
             remainingSeconds: remainingSeconds(from: machine.state),
             shortBreaksSinceLongBreak: max(machine.shortBreaksSinceLongBreak, 0),
@@ -168,7 +210,13 @@ struct TimerPersistenceService {
             skipDelaySeconds: max(stored.skipDelaySeconds, 0),
             preBreakNotificationLeadTimeSeconds: max(stored.preBreakNotificationLeadTimeSeconds, 0),
             idlePauseThresholdSeconds: max(stored.idlePauseThresholdSeconds, 0),
-            longIdleResetThresholdSeconds: max(stored.longIdleResetThresholdSeconds, 0)
+            longIdleResetThresholdSeconds: max(stored.longIdleResetThresholdSeconds, 0),
+            smartPauseIdleEnabled: stored.smartPauseIdleEnabled,
+            smartPauseFullscreenEnabled: stored.smartPauseFullscreenEnabled,
+            smartPauseMediaEnabled: stored.smartPauseMediaEnabled,
+            workHoursEnabled: stored.workHoursEnabled,
+            workdayStartMinutes: stored.workdayStartMinutes,
+            workdayEndMinutes: stored.workdayEndMinutes
         )
 
         guard let state = state(from: stored, configuration: configuration) else {

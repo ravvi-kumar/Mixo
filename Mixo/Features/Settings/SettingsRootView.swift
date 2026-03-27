@@ -1,20 +1,12 @@
 import AppKit
 import Carbon.HIToolbox
+import Foundation
 import SwiftUI
 
 struct SettingsRootView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedSection: SettingsSection = .breakSchedule
 
-    // Sprint 06 preview controls (UI-only for now).
-    @State private var pauseOnMeetings = true
-    @State private var pauseOnVideoPlayback = true
-    @State private var pauseOnCalendarEvents = true
-    @State private var pauseOnDeepFocusApps = true
-    @State private var pauseOnGaming = false
-    @State private var pauseOnScreenSharing = false
-    @State private var smartPauseCooldownMinutes = 2
-    @State private var smartPauseAwayMode: SmartPauseAwayMode = .automatic
     @State private var recordingShortcutAction: ShortcutAction?
     @State private var shortcutRecorderMonitor: Any?
     @State private var shortcutRecorderMessage: String?
@@ -169,6 +161,9 @@ struct SettingsRootView: View {
                 keyValueRow("Heads-up Lead", value: appState.preBreakNotificationLeadTimeDisplay)
                 keyValueRow("Idle Auto-Pause", value: appState.idlePauseThresholdDisplay)
                 keyValueRow("Long Idle Reset", value: appState.longIdleResetThresholdDisplay)
+                keyValueRow("Fullscreen Deferral", value: appState.timerSmartPauseFullscreenEnabled ? "Enabled" : "Disabled")
+                keyValueRow("Media Deferral", value: appState.timerSmartPauseMediaEnabled ? "Enabled" : "Disabled")
+                keyValueRow("Work Hours", value: appState.workHoursDisplay)
                 keyValueRow("Smart Pause Reason", value: appState.smartPauseReasonDisplay)
                 keyValueRow("Global Shortcuts", value: appState.globalShortcutsStatusDisplay)
             }
@@ -215,6 +210,57 @@ struct SettingsRootView: View {
                     value: $appState.timerLongBreakEveryShortBreaks,
                     in: 1 ... 12
                 )
+            }
+
+            SettingsCard(
+                title: "Work Hours Window",
+                subtitle: "Optionally restrict timer activity to a daily time window."
+            ) {
+                Toggle("Restrict Timer to Work Hours", isOn: $appState.timerWorkHoursEnabled)
+
+                HStack(spacing: 12) {
+                    Stepper(
+                        "Start Hour: \(appState.timerWorkdayStartHour)",
+                        value: $appState.timerWorkdayStartHour,
+                        in: 0 ... 23
+                    )
+
+                    Stepper(
+                        "Start Min: \(appState.timerWorkdayStartMinute)",
+                        value: $appState.timerWorkdayStartMinute,
+                        in: 0 ... 59,
+                        step: 5
+                    )
+                }
+                .disabled(!appState.timerWorkHoursEnabled)
+
+                HStack(spacing: 12) {
+                    Stepper(
+                        "End Hour: \(appState.timerWorkdayEndHour)",
+                        value: $appState.timerWorkdayEndHour,
+                        in: 0 ... 23
+                    )
+
+                    Stepper(
+                        "End Min: \(appState.timerWorkdayEndMinute)",
+                        value: $appState.timerWorkdayEndMinute,
+                        in: 0 ... 59,
+                        step: 5
+                    )
+                }
+                .disabled(!appState.timerWorkHoursEnabled)
+
+                if appState.timerWorkHoursEnabled {
+                    Text(
+                        "Active window: \(clockLabel(hour: appState.timerWorkdayStartHour, minute: appState.timerWorkdayStartMinute)) - \(clockLabel(hour: appState.timerWorkdayEndHour, minute: appState.timerWorkdayEndMinute))"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text("Work hours are off. Timer can run at any time.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             SettingsCard(
@@ -281,8 +327,21 @@ struct SettingsRootView: View {
     private var smartPausePanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsCard(
-                title: "Idle Auto-Pause (Live)",
-                subtitle: "Timer pauses when you are idle past the threshold and resumes when activity returns."
+                title: "Detector Toggles",
+                subtitle: "Enable or disable each smart-pause detector."
+            ) {
+                Toggle("Idle Activity", isOn: $appState.timerSmartPauseIdleEnabled)
+                Toggle("Fullscreen App", isOn: $appState.timerSmartPauseFullscreenEnabled)
+                Toggle("Media Playback", isOn: $appState.timerSmartPauseMediaEnabled)
+
+                Text("Apply timer settings while timer is idle to persist detector changes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsCard(
+                title: "Idle Auto-Pause Thresholds",
+                subtitle: "Idle thresholds apply only when Idle Activity detector is enabled."
             ) {
                 Stepper(
                     "Pause Timer After Idle: \(appState.timerIdlePauseThresholdSeconds) sec",
@@ -290,6 +349,7 @@ struct SettingsRootView: View {
                     in: 0 ... 1800,
                     step: 5
                 )
+                .disabled(!appState.timerSmartPauseIdleEnabled)
 
                 Stepper(
                     "Reset Timer After Long Idle: \(appState.timerLongIdleResetThresholdSeconds) sec",
@@ -297,8 +357,13 @@ struct SettingsRootView: View {
                     in: 0 ... 7200,
                     step: 10
                 )
+                .disabled(!appState.timerSmartPauseIdleEnabled)
 
-                if appState.timerIdlePauseThresholdSeconds == 0 {
+                if !appState.timerSmartPauseIdleEnabled {
+                    Text("Idle detector is disabled. Thresholds are ignored.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if appState.timerIdlePauseThresholdSeconds == 0 {
                     Text("Idle auto-pause is disabled when threshold is 0 seconds.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -316,78 +381,13 @@ struct SettingsRootView: View {
             }
 
             SettingsCard(
-                title: "Automatically Pause During",
-                subtitle: "These controls are the visual foundation for Sprint 06 smart pause behavior."
+                title: "Runtime Status",
+                subtitle: "Current smart-pause state as seen by the timer engine."
             ) {
-                smartPauseRuleRow(
-                    iconName: "headphones",
-                    title: "Meetings or Calls",
-                    subtitle: "Pause breaks while calls or meetings are active.",
-                    isOn: $pauseOnMeetings
-                )
-
-                smartPauseRuleRow(
-                    iconName: "play.rectangle.fill",
-                    title: "Video Playback",
-                    subtitle: "Pause breaks while video playback is detected.",
-                    isOn: $pauseOnVideoPlayback
-                )
-
-                smartPauseRuleRow(
-                    iconName: "calendar",
-                    title: "Calendar Events",
-                    subtitle: "Pause breaks when a calendar event is active.",
-                    isOn: $pauseOnCalendarEvents
-                )
-
-                smartPauseRuleRow(
-                    iconName: "moon.zzz.fill",
-                    title: "Deep Focus Apps",
-                    subtitle: "Pause breaks when selected focus apps are frontmost.",
-                    isOn: $pauseOnDeepFocusApps
-                )
-
-                smartPauseRuleRow(
-                    iconName: "gamecontroller.fill",
-                    title: "Gaming",
-                    subtitle: "Pause breaks while full-screen games are running.",
-                    isOn: $pauseOnGaming
-                )
-
-                smartPauseRuleRow(
-                    iconName: "rectangle.on.rectangle",
-                    title: "Screen Recording or Sharing",
-                    subtitle: "Pause breaks while recording or sharing your screen.",
-                    isOn: $pauseOnScreenSharing
-                )
-            }
-
-            SettingsCard(title: "Cooldown", subtitle: "Delay before smart pause re-triggers after it ends.") {
-                HStack {
-                    Text("Cooldown after Smart Pause ends")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Stepper(
-                        "\(smartPauseCooldownMinutes) min",
-                        value: $smartPauseCooldownMinutes,
-                        in: 0 ... 15
-                    )
-                    .frame(width: 170)
-                }
-            }
-
-            SettingsCard(title: "When You Are Away", subtitle: "How Mixo should behave when you're away from keyboard.") {
-                Picker("Pause or Resume", selection: $smartPauseAwayMode) {
-                    ForEach(SmartPauseAwayMode.allCases, id: \.self) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 240, alignment: .leading)
-
-                Text("Automatic mode will pause or resume based on idle and active-context signals once Sprint 06 behavior is wired.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                keyValueRow("Active Reason", value: appState.smartPauseReasonDisplay)
+                keyValueRow("Idle Detector", value: appState.timerSmartPauseIdleEnabled ? "Enabled" : "Disabled")
+                keyValueRow("Fullscreen Detector", value: appState.timerSmartPauseFullscreenEnabled ? "Enabled" : "Disabled")
+                keyValueRow("Media Detector", value: appState.timerSmartPauseMediaEnabled ? "Enabled" : "Disabled")
             }
         }
     }
@@ -495,44 +495,6 @@ struct SettingsRootView: View {
         .font(.system(size: 13))
     }
 
-    private func smartPauseRuleRow(
-        iconName: String,
-        title: String,
-        subtitle: String,
-        isOn: Binding<Bool>
-    ) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.white.opacity(0.1))
-                .frame(width: 34, height: 34)
-                .overlay {
-                    Image(systemName: iconName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button("Options...") {}
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-            Toggle("", isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(.vertical, 2)
-    }
-
     private func policyLabel(for mode: BreakPolicyMode) -> String {
         switch mode {
         case .skipAnytime:
@@ -542,6 +504,10 @@ struct SettingsRootView: View {
         case .lock:
             return "Lock"
         }
+    }
+
+    private func clockLabel(hour: Int, minute: Int) -> String {
+        String(format: "%02d:%02d", max(0, min(hour, 23)), max(0, min(minute, 59)))
     }
 
     private func shortcutDisplay(for action: ShortcutAction) -> String {
@@ -814,23 +780,6 @@ private enum SettingsSection: String, Hashable, CaseIterable, Identifiable {
             return .orange
         case .about:
             return .yellow
-        }
-    }
-}
-
-private enum SmartPauseAwayMode: String, CaseIterable {
-    case automatic
-    case pauseOnly
-    case resumeOnly
-
-    var title: String {
-        switch self {
-        case .automatic:
-            return "Automatic"
-        case .pauseOnly:
-            return "Pause Only"
-        case .resumeOnly:
-            return "Resume Only"
         }
     }
 }
